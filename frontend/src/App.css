@@ -1,34 +1,21 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* App-level overrides */
+.App { min-height: 100vh; }
+
+.sidebar-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 8px; font-size: 0.875rem;
+    color: var(--text-secondary); transition: background 0.15s, color 0.15s;
+    cursor: pointer;
+}
+.sidebar-link:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+.sidebar-link.active {
+    background: var(--bg-surface-hover); color: var(--text-primary); font-weight: 600;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.stat-card {
+    background: white; border: 1px solid var(--border-default);
+    border-radius: 12px; padding: 20px;
+    transition: all 0.2s;
 }
-
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
-}
-
-.App-link {
-    color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
+.stat-card:hover { box-shadow: 0 1px 3px rgba(0,0,0,0.04); transform: translateY(-1px); }
+.stat-num { font-family: 'Work Sans', sans-serif; font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
