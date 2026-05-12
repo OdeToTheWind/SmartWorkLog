@@ -7,6 +7,8 @@ import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { PlusIcon as Plus } from "@phosphor-icons/react";
+import { Trash2 } from "lucide-react";
+import GdprPurgeDialog from "../components/GdprPurgeDialog";
 import { toast } from "sonner";
 
 const ROLES = ["hr", "supervisor", "developer", "team_member", "employee"];
@@ -43,6 +45,8 @@ export default function People() {
   };
 
   const supervisors = people.filter((p) => p.role === "supervisor");
+  const [gdprTarget, setGdprTarget] = useState(null);
+  const canPurge = ["hr", "super_admin"].includes(user.role);
 
   return (
     <div className="space-y-6" data-testid="people-page">
@@ -66,6 +70,16 @@ export default function People() {
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               <span className="role-pill" style={{ background: `${ROLE_COLOR[p.role]}15`, color: ROLE_COLOR[p.role] }}>{ROLE_LABEL[p.role]}</span>
               {p.streak_count > 0 && <span className="text-xs text-slate-500">{p.streak_count}d streak</span>}
+              {canPurge && p.id !== user.user_id && p.role !== "super_admin" && (
+                <button
+                  onClick={() => setGdprTarget(p)}
+                  className="ml-auto text-red-500 hover:text-red-700 p-1 rounded"
+                  data-testid={`gdpr-btn-${p.id}`}
+                  title="GDPR — permanent delete"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -134,6 +148,7 @@ export default function People() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <GdprPurgeDialog open={!!gdprTarget} onOpenChange={(o) => !o && setGdprTarget(null)} user={gdprTarget} onPurged={load} />
     </div>
   );
 }

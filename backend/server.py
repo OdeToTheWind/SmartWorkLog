@@ -1,7 +1,7 @@
 """Smart WorkLog AI - FastAPI Backend
 Multi-tenant workforce management. JWT auth. Priority escalation. Audit log. AI daily-update parsing via Gemini 2.5 Flash.
 """
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, Request
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, Request, UploadFile, File, Query, Header, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta, date
 from pathlib import Path
-import os, uuid, logging, bcrypt, jwt, json, asyncio
+import os, uuid, logging, bcrypt, jwt, json, asyncio, io, requests
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,6 +19,11 @@ MONGO_URL = os.environ['MONGO_URL']
 DB_NAME = os.environ['DB_NAME']
 JWT_SECRET = os.environ['JWT_SECRET']
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')  # MOCKED if empty
+MAKE_WEBHOOK_SECRET = os.environ.get('MAKE_WEBHOOK_SECRET', 'change-me-make-secret')
+APP_NAME = "smart-worklog-ai"
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+storage_key: Optional[str] = None
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -760,7 +765,429 @@ async def leaderboard(u: TokenUser = Depends(current_user)):
             out.append({**usr, "completed": r["completed"]})
     return out
 
+# ---------- OBJECT STORAGE (Emergent managed) ----------
+def init_storage() -> Optional[str]:
+    global storage_key
+    if storage_key:
+        return storage_key
+    if not EMERGENT_LLM_KEY:
+        return None
+    try:
+        r = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=15)
+        r.raise_for_status()
+        storage_key = r.json()["storage_key"]
+        log.info("Object storage initialised")
+        return storage_key
+    except Exception as e:
+        log.warning(f"Storage init failed: {e}")
+        return None
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = init_storage()
+    if not key:
+        raise HTTPException(503, "Storage not initialised")
+    r = requests.put(f"{STORAGE_URL}/objects/{path}",
+                     headers={"X-Storage-Key": key, "Content-Type": content_type},
+                     data=data, timeout=120)
+    r.raise_for_status()
+    return r.json()
+
+def get_object(path: str):
+    key = init_storage()
+    if not key:
+        raise HTTPException(503, "Storage not initialised")
+    r = requests.get(f"{STORAGE_URL}/objects/{path}",
+                     headers={"X-Storage-Key": key}, timeout=60)
+    r.raise_for_status()
+    return r.content, r.headers.get("Content-Type", "application/octet-stream")
+
+MIME_BY_EXT = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+               "pdf": "application/pdf", "gif": "image/gif", "webp": "image/webp"}
+
+@api.post("/files/upload")
+async def upload_file(file: UploadFile = File(...), task_id: Optional[str] = Query(None),
+                      daily_update_date: Optional[str] = Query(None),
+                      u: TokenUser = Depends(current_user)):
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(400, "File exceeds 5MB")
+    ext = (file.filename or "bin").rsplit(".", 1)[-1].lower()
+    if ext not in MIME_BY_EXT:
+        raise HTTPException(400, f"Unsupported file type .{ext} — allowed: jpg/png/pdf/gif/webp")
+    fid = gen_id()
+    path = f"{APP_NAME}/{u.company_id}/{u.user_id}/{fid}.{ext}"
+    result = put_object(path, data, MIME_BY_EXT[ext])
+    doc = {
+        "id": fid, "company_id": u.company_id, "user_id": u.user_id,
+        "storage_path": result["path"], "original_filename": file.filename,
+        "content_type": MIME_BY_EXT[ext], "size": result.get("size", len(data)),
+        "task_id": task_id, "daily_update_date": daily_update_date,
+        "is_deleted": False, "created_at": now_iso(),
+    }
+    await db.attachments.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api.get("/files/{file_id}")
+async def serve_file(file_id: str, auth: Optional[str] = Query(None),
+                     authorization: Optional[str] = Header(None)):
+    # Authenticate via header OR ?auth=token (for <img src>)
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+    elif auth:
+        token = auth
+    if not token:
+        raise HTTPException(401, "Missing token")
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        raise HTTPException(401, "Invalid token")
+    rec = await db.attachments.find_one({"id": file_id, "is_deleted": False}, {"_id": 0})
+    if not rec or rec["company_id"] != payload["company_id"]:
+        raise HTTPException(404, "Not found")
+    data, ct = get_object(rec["storage_path"])
+    return Response(content=data, media_type=rec.get("content_type", ct))
+
+@api.get("/files")
+async def list_files(u: TokenUser = Depends(current_user), task_id: Optional[str] = None,
+                     daily_update_date: Optional[str] = None):
+    q = {"company_id": u.company_id, "is_deleted": False}
+    if task_id: q["task_id"] = task_id
+    if daily_update_date: q["daily_update_date"] = daily_update_date
+    if u.role in ("employee", "team_member", "developer"):
+        q["user_id"] = u.user_id
+    items = await db.attachments.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return items
+
+@api.delete("/files/{file_id}")
+async def delete_file(file_id: str, u: TokenUser = Depends(current_user)):
+    rec = await db.attachments.find_one({"id": file_id, "company_id": u.company_id}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Not found")
+    if rec["user_id"] != u.user_id and u.role not in ("hr", "super_admin", "supervisor"):
+        raise HTTPException(403, "Not allowed")
+    await db.attachments.update_one({"id": file_id}, {"$set": {"is_deleted": True}})
+    return {"ok": True}
+
+# ---------- TELEGRAM BOT (MOCKED — works once TELEGRAM_BOT_TOKEN env set) ----------
+class TelegramLinkIn(BaseModel):
+    telegram_id: str
+
+@api.post("/telegram/link")
+async def link_telegram(body: TelegramLinkIn, u: TokenUser = Depends(current_user)):
+    """Link a Telegram chat_id to the current user. Frontend calls this from the Profile screen."""
+    await db.users.update_one({"id": u.user_id}, {"$set": {"telegram_id": body.telegram_id}})
+    return {"ok": True}
+
+def tg_send(chat_id: str, text: str) -> bool:
+    if not TELEGRAM_BOT_TOKEN:
+        log.info(f"[TG MOCK] → {chat_id}: {text[:120]}")
+        return False
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                          json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+                          timeout=10)
+        return r.status_code == 200
+    except Exception as e:
+        log.warning(f"TG send failed: {e}")
+        return False
+
+async def tg_translate_reply(text: str, lang: str) -> str:
+    if lang in ("en", "", None):
+        return text
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"tg-{gen_id()}",
+                       system_message=f"Translate the user's text naturally into language code '{lang}'. Reply ONLY with the translation.").with_model("gemini", "gemini-2.5-flash")
+        return (await chat.send_message(UserMessage(text=text))).strip()
+    except Exception:
+        return text
+
+async def _tg_handle_command(user: dict, text: str) -> str:
+    """Returns the reply text. Handles role-aware commands."""
+    cmd = text.strip().lower()
+    role = user["role"]
+    cid = user["company_id"]
+    name = user["name"]
+
+    if cmd in ("/start", "start", "hi", "hello"):
+        return f"Hi {name}! I'm your WorkLog assistant. Try: 'my tasks', 'acknowledge', 'i'm on leave tomorrow'."
+
+    if cmd in ("my tasks", "/tasks", "tasks"):
+        tasks = await db.tasks.find({"company_id": cid, "assigned_to_user_id": user["id"],
+                                      "archived": {"$ne": True}, "status": {"$ne": "done"}},
+                                     {"_id": 0}).sort("priority", 1).to_list(20)
+        if not tasks: return "You have no open tasks. Enjoy the break ☕"
+        order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        tasks.sort(key=lambda t: order.get(t["priority"], 4))
+        lines = [f"*Your open tasks ({len(tasks)}):*"]
+        for t in tasks[:10]:
+            lines.append(f"• [{t['priority'].upper()}] {t['title']}")
+        return "\n".join(lines)
+
+    if cmd in ("acknowledge", "ack"):
+        crit = await db.tasks.find_one({"company_id": cid, "assigned_to_user_id": user["id"],
+                                         "priority": "critical", "status": {"$ne": "done"},
+                                         "acknowledged_at": None}, {"_id": 0})
+        if not crit: return "No unacknowledged critical tasks."
+        await db.tasks.update_one({"id": crit["id"]}, {"$set": {"acknowledged_at": now_iso()}})
+        return f"✅ Acknowledged: {crit['title']}"
+
+    if "leave" in cmd and role in ("employee","team_member","developer","supervisor"):
+        # quick leave register for tomorrow
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        lid = gen_id()
+        await db.leaves.insert_one({"id": lid, "company_id": cid, "user_id": user["id"],
+                                     "start_date": tomorrow, "end_date": tomorrow,
+                                     "leave_type": "personal", "reason": text,
+                                     "status": "pending", "created_at": now_iso()})
+        sup_id = user.get("supervisor_id")
+        if sup_id:
+            await db.notifications.insert_one({"id": gen_id(), "company_id": cid, "user_id": sup_id,
+                                                "type": "leave_requested", "read": False,
+                                                "message": f"{name} requested leave for {tomorrow} via Telegram",
+                                                "related_task_id": None, "created_at": now_iso()})
+        return f"Leave request submitted for {tomorrow}. Awaiting supervisor approval."
+
+    if role in ("supervisor", "hr", "super_admin") and "team status" in cmd:
+        today_ = date.today().isoformat()
+        if role == "supervisor":
+            team = await db.users.find({"supervisor_id": user["id"]}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+        else:
+            team = await db.users.find({"company_id": cid, "role": {"$nin": ["super_admin"]}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+        ups = await db.daily_updates.find({"company_id": cid, "date": today_,
+                                            "user_id": {"$in": [t["id"] for t in team]}},
+                                           {"_id": 0}).to_list(500)
+        upd_ids = {u["user_id"] for u in ups}
+        avg = round(sum([u.get("mood_score",3) for u in ups])/len(ups), 2) if ups else 0
+        return f"*Team status today:*\nMembers: {len(team)}\nUpdates submitted: {len(ups)}\nAvg mood: {avg}/5\nMissing: {len(team)-len(upd_ids)}"
+
+    if role in ("hr", "super_admin") and "team mood" in cmd:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat()
+        ups = await db.daily_updates.find({"company_id": cid, "date": {"$gte": cutoff}},
+                                           {"_id": 0}).to_list(1000)
+        if not ups: return "No mood data in last 7 days."
+        avg = round(sum([u.get("mood_score",3) for u in ups])/len(ups), 2)
+        low = [u for u in ups if u.get("mood_score", 3) <= 2]
+        return f"*7-day mood:* avg {avg}/5 across {len(ups)} updates. Low-mood entries: {len(low)}"
+
+    if role in ("hr", "super_admin") and "pending leaves" in cmd:
+        leaves = await db.leaves.find({"company_id": cid, "status": "pending"}, {"_id": 0}).to_list(100)
+        if not leaves: return "No pending leave requests."
+        lines = ["*Pending leave requests:*"]
+        for l in leaves[:10]:
+            usr = await db.users.find_one({"id": l["user_id"]}, {"_id": 0, "name": 1}) or {}
+            lines.append(f"• {usr.get('name','?')}: {l['start_date']} → {l['end_date']}")
+        return "\n".join(lines)
+
+    if role in ("supervisor", "hr", "super_admin") and "critical tasks" in cmd:
+        crits = await db.tasks.find({"company_id": cid, "priority": "critical",
+                                      "status": {"$ne": "done"}, "archived": {"$ne": True}},
+                                     {"_id": 0}).to_list(50)
+        if not crits: return "No critical tasks right now. 🎉"
+        lines = [f"*{len(crits)} critical tasks:*"]
+        for t in crits[:10]:
+            assignee = await db.users.find_one({"id": t["assigned_to_user_id"]}, {"_id": 0, "name": 1}) or {}
+            lines.append(f"• {t['title']} → {assignee.get('name','?')}")
+        return "\n".join(lines)
+
+    # Default: free-text daily update → parse via AI
+    tasks = await db.tasks.find({"company_id": cid, "assigned_to_user_id": user["id"],
+                                  "archived": {"$ne": True}}, {"_id": 0}).to_list(50)
+    ai = await ai_parse_update(text, tasks)
+    today_ = date.today().isoformat()
+    await db.daily_updates.update_one(
+        {"company_id": cid, "user_id": user["id"], "date": today_},
+        {"$set": {"id": gen_id(), "company_id": cid, "user_id": user["id"], "date": today_,
+                  "raw_message": text, "mood_score": ai["mood_score"], "urgency": ai["urgency"],
+                  "ai_summary": ai["summary"], "ai_reply": ai["ai_reply"], "language": ai["language"],
+                  "submitted_at": now_iso(), "completed_task_ids": [], "in_progress_task_ids": []}},
+        upsert=True)
+    return ai["ai_reply"]
+
+@api.post("/telegram/webhook")
+async def telegram_webhook(req: Request):
+    """Telegram sends updates here. Configure via setWebhook once you have a bot token.
+    MOCKED behaviour: still processes the message (DB writes happen) but won't send a real reply."""
+    body = await req.json()
+    msg = body.get("message") or body.get("edited_message") or {}
+    chat_id = str(msg.get("chat", {}).get("id", ""))
+    text = msg.get("text", "")
+    if not chat_id or not text:
+        return {"ok": True, "ignored": True}
+    user = await db.users.find_one({"telegram_id": chat_id}, {"_id": 0})
+    if not user:
+        tg_send(chat_id, "I don't recognise this Telegram account. Please link it in your Profile inside the WorkLog app first.")
+        return {"ok": True, "unlinked": True}
+    try:
+        reply = await _tg_handle_command(user, text)
+    except Exception as e:
+        log.exception("TG handler error")
+        reply = "Sorry — something went wrong on my side."
+    lang = user.get("language", "en")
+    if lang and lang != "en":
+        reply = await tg_translate_reply(reply, lang)
+    tg_send(chat_id, reply)
+    return {"ok": True, "mocked": not bool(TELEGRAM_BOT_TOKEN)}
+
+# ---------- MAKE.COM CRON ENDPOINTS ----------
+def _require_make_secret(secret: str):
+    if not secret or secret != MAKE_WEBHOOK_SECRET:
+        raise HTTPException(401, "Invalid Make.com webhook secret")
+
+@api.post("/cron/generate-digest")
+async def cron_generate_digest(company_id: str = Query(...), secret: str = Query(...)):
+    """Called by Make.com at 6pm. Returns digest text and posts to HR notification."""
+    _require_make_secret(secret)
+    text = await ai_digest(company_id)
+    hrs = await db.users.find({"company_id": company_id, "role": "hr"}, {"_id": 0, "id": 1, "telegram_id": 1}).to_list(50)
+    for h in hrs:
+        await db.notifications.insert_one({"id": gen_id(), "company_id": company_id, "user_id": h["id"],
+                                            "type": "daily_digest", "message": text, "read": False,
+                                            "related_task_id": None, "created_at": now_iso()})
+        if h.get("telegram_id"):
+            tg_send(h["telegram_id"], f"*Daily Digest*\n\n{text}")
+    return {"digest": text, "delivered_to": len(hrs)}
+
+@api.post("/cron/generate-weekly-pdf")
+async def cron_weekly_pdf(company_id: str = Query(...), secret: str = Query(...)):
+    """Called by Make.com Friday 6pm. Generates PDF report, uploads to storage, returns URL."""
+    _require_make_secret(secret)
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import cm
+    except Exception as e:
+        raise HTTPException(500, f"PDF library missing: {e}")
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat()
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0}) or {"name": "Unknown"}
+    ups = await db.daily_updates.find({"company_id": company_id, "date": {"$gte": cutoff}}, {"_id": 0}).to_list(2000)
+    tasks_done = await db.tasks.count_documents({"company_id": company_id, "status": "done", "updated_at": {"$gte": cutoff}})
+    blockers = sum(1 for u in ups if u.get("blocker_text"))
+    avg_mood = round(sum([u.get("mood_score",3) for u in ups])/len(ups), 2) if ups else 0
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+    y = height - 2*cm
+    c.setFont("Helvetica-Bold", 18); c.drawString(2*cm, y, f"{company['name']} — Weekly Report"); y -= 1*cm
+    c.setFont("Helvetica", 10); c.drawString(2*cm, y, f"Week ending {date.today().isoformat()}"); y -= 1.2*cm
+    c.setFont("Helvetica-Bold", 12); c.drawString(2*cm, y, "Summary"); y -= 0.7*cm
+    c.setFont("Helvetica", 11)
+    for line in [f"Daily updates submitted: {len(ups)}",
+                 f"Tasks completed: {tasks_done}",
+                 f"Blockers reported: {blockers}",
+                 f"Average mood (1-5): {avg_mood}"]:
+        c.drawString(2.3*cm, y, line); y -= 0.6*cm
+    y -= 0.5*cm
+    c.setFont("Helvetica-Bold", 12); c.drawString(2*cm, y, "AI digest"); y -= 0.7*cm
+    c.setFont("Helvetica", 10)
+    digest = await ai_digest(company_id)
+    for chunk in [digest[i:i+95] for i in range(0, len(digest), 95)]:
+        c.drawString(2.3*cm, y, chunk); y -= 0.5*cm
+        if y < 3*cm: break
+    c.showPage(); c.save()
+    pdf_bytes = buf.getvalue()
+    path = f"{APP_NAME}/{company_id}/reports/{date.today().isoformat()}-{gen_id()[:8]}.pdf"
+    result = put_object(path, pdf_bytes, "application/pdf")
+    fid = gen_id()
+    await db.attachments.insert_one({
+        "id": fid, "company_id": company_id, "user_id": "system",
+        "storage_path": result["path"], "original_filename": f"weekly-report-{date.today().isoformat()}.pdf",
+        "content_type": "application/pdf", "size": len(pdf_bytes),
+        "task_id": None, "daily_update_date": None,
+        "is_deleted": False, "created_at": now_iso(), "report": True,
+    })
+    hrs = await db.users.find({"company_id": company_id, "role": "hr"}, {"_id": 0, "id": 1, "telegram_id": 1}).to_list(50)
+    for h in hrs:
+        await db.notifications.insert_one({"id": gen_id(), "company_id": company_id, "user_id": h["id"],
+                                            "type": "weekly_report", "read": False,
+                                            "message": f"Weekly PDF report ready: /api/files/{fid}",
+                                            "related_task_id": None, "created_at": now_iso()})
+        if h.get("telegram_id"):
+            tg_send(h["telegram_id"], f"Weekly report ready 📊")
+    return {"ok": True, "file_id": fid, "size": len(pdf_bytes)}
+
+# ---------- HR CRITICAL SLA WIDGET ----------
+@api.get("/dashboard/sla")
+async def critical_sla(u: TokenUser = Depends(require_roles("hr", "super_admin", "supervisor"))):
+    """Average acknowledgement time for Critical tasks (the differentiator metric)."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    q = {"company_id": u.company_id, "priority": "critical",
+         "acknowledged_at": {"$ne": None}, "updated_at": {"$gte": cutoff}}
+    crits = await db.tasks.find(q, {"_id": 0}).to_list(500)
+    times = []
+    for t in crits:
+        try:
+            # find escalation timestamp from priority_changes
+            esc = await db.priority_changes.find_one({"task_id": t["id"], "new_priority": "critical"},
+                                                       sort=[("timestamp", -1)])
+            start = datetime.fromisoformat(esc["timestamp"]) if esc else datetime.fromisoformat(t["updated_at"])
+            ack = datetime.fromisoformat(t["acknowledged_at"])
+            times.append((ack - start).total_seconds() / 60.0)  # minutes
+        except Exception:
+            continue
+    unacked = await db.tasks.count_documents({"company_id": u.company_id, "priority": "critical",
+                                                "acknowledged_at": None, "status": {"$ne": "done"},
+                                                "archived": {"$ne": True}})
+    avg_ack_min = round(sum(times) / len(times), 1) if times else 0
+    over_30min = sum(1 for t in times if t > 30)
+    return {
+        "avg_ack_minutes": avg_ack_min,
+        "total_critical_30d": len(crits),
+        "over_30min_count": over_30min,
+        "currently_unacknowledged": unacked,
+        "compliance_pct": round(100 * (len(times) - over_30min) / len(times), 1) if times else 100.0,
+    }
+
+@api.get("/dashboard/mood-trend")
+async def mood_trend(days: int = 30, u: TokenUser = Depends(current_user)):
+    """Returns daily aggregate mood for charts. Scoped by role."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
+    q = {"company_id": u.company_id, "date": {"$gte": cutoff}}
+    if u.role in ("employee", "team_member", "developer"):
+        q["user_id"] = u.user_id
+    elif u.role == "supervisor":
+        team = await db.users.find({"supervisor_id": u.user_id}, {"_id": 0, "id": 1}).to_list(500)
+        q["user_id"] = {"$in": [x["id"] for x in team] + [u.user_id]}
+    ups = await db.daily_updates.find(q, {"_id": 0, "date": 1, "mood_score": 1, "user_id": 1}).to_list(5000)
+    bydate = {}
+    for u_ in ups:
+        d = u_["date"]; bydate.setdefault(d, []).append(u_.get("mood_score", 3))
+    rows = [{"date": d, "avg_mood": round(sum(v)/len(v), 2), "count": len(v)} for d, v in sorted(bydate.items())]
+    return rows
+
+# ---------- GDPR — Right to Delete ----------
+class GDPRConfirm(BaseModel):
+    confirmation_text: str  # must equal "DELETE PERMANENTLY"
+
+@api.delete("/users/{user_id}/purge")
+async def gdpr_purge(user_id: str, body: GDPRConfirm, u: TokenUser = Depends(require_roles("hr", "super_admin"))):
+    """Two-step destructive purge of all data for a user. Irreversible."""
+    if body.confirmation_text != "DELETE PERMANENTLY":
+        raise HTTPException(400, "Confirmation phrase mismatch")
+    target = await db.users.find_one({"id": user_id, "company_id": u.company_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if target["role"] == "super_admin":
+        raise HTTPException(403, "Cannot purge super_admin")
+    res = {
+        "user": (await db.users.delete_one({"id": user_id, "company_id": u.company_id})).deleted_count,
+        "tasks": (await db.tasks.delete_many({"company_id": u.company_id, "assigned_to_user_id": user_id})).deleted_count,
+        "daily_updates": (await db.daily_updates.delete_many({"company_id": u.company_id, "user_id": user_id})).deleted_count,
+        "notifications": (await db.notifications.delete_many({"company_id": u.company_id, "user_id": user_id})).deleted_count,
+        "leaves": (await db.leaves.delete_many({"company_id": u.company_id, "user_id": user_id})).deleted_count,
+        "audit_log": (await db.audit_log.delete_many({"company_id": u.company_id, "$or": [{"performed_by_user_id": user_id}, {"target_user_id": user_id}]})).deleted_count,
+        "attachments": (await db.attachments.update_many({"company_id": u.company_id, "user_id": user_id}, {"$set": {"is_deleted": True}})).modified_count,
+    }
+    await audit(u.company_id, "gdpr_purge", u.user_id, user_id, None, None, res, "GDPR right-to-delete")
+    return {"ok": True, "purged": res}
+
 # ---------- MOUNT ----------
+@app.on_event("startup")
+async def _startup():
+    init_storage()
+
 app.include_router(api)
 app.add_middleware(
     CORSMiddleware,

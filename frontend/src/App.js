@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
+import { I18nProvider } from "./lib/i18n";
 import Layout from "./components/Layout";
 import CriticalBanner from "./components/CriticalBanner";
 import Login from "./pages/Login";
@@ -12,6 +13,7 @@ import Leave from "./pages/Leave";
 import AuditLog from "./pages/AuditLog";
 import Leaderboard from "./pages/Leaderboard";
 import DailyUpdate from "./pages/DailyUpdate";
+import History from "./pages/History";
 import { Toaster } from "./components/ui/sonner";
 import "@/App.css";
 
@@ -28,23 +30,26 @@ const Protected = ({ children }) => {
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Toaster position="top-right" richColors />
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<Protected><Dashboard /></Protected>} />
-          <Route path="/tasks" element={<Protected><Tasks /></Protected>} />
-          <Route path="/people" element={<Protected><People /></Protected>} />
-          <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
-          <Route path="/leave" element={<Protected><Leave /></Protected>} />
-          <Route path="/audit" element={<Protected><AuditLog /></Protected>} />
-          <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
-          <Route path="/daily-update" element={<Protected><DailyUpdate /></Protected>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <I18nProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Toaster position="top-right" richColors />
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<Protected><Dashboard /></Protected>} />
+            <Route path="/tasks" element={<Protected><Tasks /></Protected>} />
+            <Route path="/people" element={<Protected><People /></Protected>} />
+            <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
+            <Route path="/leave" element={<Protected><Leave /></Protected>} />
+            <Route path="/audit" element={<Protected><AuditLog /></Protected>} />
+            <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
+            <Route path="/daily-update" element={<Protected><DailyUpdate /></Protected>} />
+            <Route path="/history" element={<Protected><History /></Protected>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </I18nProvider>
   );
 }
 

@@ -40,6 +40,17 @@ Build a full-stack workforce daily-update and task management system with AI int
 - Sidebar nav with role colour accents (purple/blue/teal/indigo/green)
 
 ## Deferred (Phase 2 backlog)
+### Shipped May 2026
+- **Telegram bot scaffold** (MOCKED until `TELEGRAM_BOT_TOKEN` env set): `/api/telegram/webhook` accepts updates, role-aware commands (my tasks, acknowledge, leave, team status, team mood today, pending leaves, critical tasks), free-text → Gemini AI parse, replies translated to user's preferred language via Gemini. `/api/telegram/link` binds chat_id.
+- **Make.com cron endpoints**: `/api/cron/generate-digest` (6pm digest) and `/api/cron/generate-weekly-pdf` (Friday weekly PDF via reportlab → uploaded to Emergent object storage → HR notified). Auth via `MAKE_WEBHOOK_SECRET`.
+- **Object storage attachments** via Emergent managed storage: `/api/files/upload` (5MB cap, jpg/png/pdf/gif/webp), `/api/files/{id}` serves via header- or query-token auth, `/api/files` listing scoped per role, soft-delete.
+- **GDPR right-to-delete** (`DELETE /api/users/{id}/purge`): two-step confirmation (exact phrase `DELETE PERMANENTLY`), cascade-deletes tasks/updates/notifications/leaves/audit/attachments, irreversible. UI dialog: two-step modal in People page.
+- **HR Critical-task SLA widget**: `/api/dashboard/sla` returns avg ack minutes, compliance %, breaches over 30 min, currently unacknowledged. Displayed on HR/Supervisor/Super Admin dashboards.
+- **Mood trend chart** (Recharts line) + **30-day activity heatmap** on new `/history` page.
+- **PWA**: `manifest.json` + `sw.js` with cache-first for static and network-first for `/api/*` → installable on Android, offline-capable.
+- **Multi-language i18n** + RTL: 7 languages (en/hi/ar/ur/bn/fr/sw), AR/UR auto-RTL, switcher in History page, Telegram replies translated.
+
+
 - Telegram two-way bot
 - FCM push notifications
 - Make.com cron (6pm digest + Friday PDF)

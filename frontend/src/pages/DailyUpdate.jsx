@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Label } from "../components/ui/label";
 import { toast } from "sonner";
 import { SparkleIcon as Sparkle } from "@phosphor-icons/react";
+import AttachmentUploader from "../components/AttachmentUploader";
 
 export default function DailyUpdate() {
   const { user } = useAuth();
@@ -53,6 +54,7 @@ export default function DailyUpdate() {
             <Label>Blocker (optional)</Label>
             <Textarea rows={2} value={blocker} onChange={(e) => setBlocker(e.target.value)} placeholder="What's blocking you?" data-testid="du-blocker" />
           </div>
+          <AttachmentUploader dailyUpdateDate={new Date().toISOString().slice(0,10)} />
           <Button onClick={submit} disabled={busy} data-testid="du-submit">{busy ? "Submitting..." : "Submit & AI parse"}</Button>
         </CardContent>
       </Card>

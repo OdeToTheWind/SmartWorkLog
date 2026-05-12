@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { useAuth, ROLE_COLOR, ROLE_LABEL, PRIORITY_COLOR } from "../lib/auth";
 import TaskCard from "../components/TaskCard";
 import PriorityModal from "../components/PriorityModal";
+import SLAWidget from "../components/SLAWidget";
 import { Button } from "../components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 import { Textarea } from "../components/ui/textarea";
@@ -107,6 +108,8 @@ export default function Dashboard() {
       </div>
 
       {/* HR/Supervisor digest */}
+      {["hr", "supervisor", "super_admin"].includes(user.role) && <SLAWidget />}
+
       {digest && (
         <Card data-testid="ai-digest-card">
           <CardHeader className="flex flex-row items-center gap-2">
