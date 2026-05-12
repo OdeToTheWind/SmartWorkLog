@@ -1000,14 +1000,112 @@ async def _tg_handle_command(user: dict, text: str) -> str:
         "/teammood": "team mood today", "/pendingleaves": "pending leaves",
         "/criticaltasks": "critical tasks",
     }
-    if cmd in SLASH_MAP:
-        cmd = SLASH_MAP[cmd]
+    # Special: /newtask handled below — keep raw, do NOT map it
+    if raw_command := text.strip().split()[0].lower() if text.strip() else "":
+        if raw_command in ("/newtask", "/task") and len(text.strip().split()) > 1:
+            pass  # will be handled by NEW_PREFIXES below
+        elif cmd in SLASH_MAP:
+            cmd = SLASH_MAP[cmd]
+    else:
+        if cmd in SLASH_MAP:
+            cmd = SLASH_MAP[cmd]
     role = user["role"]
     cid = user["company_id"]
     name = user["name"]
 
     if cmd in ("/start", "start", "hi", "hello"):
-        return f"Hi {name}! I'm your WorkLog assistant. Try: 'my tasks', 'acknowledge', 'i'm on leave tomorrow'."
+        return (f"Hi {name}! I'm your WorkLog assistant. Try:\n"
+                "• /tasks — list your open tasks\n"
+                "• /newtask <title> — add a new task (or 'new task: review Q4 budget by Friday, high')\n"
+                "• /acknowledge — acknowledge a critical task\n"
+                "• /leave — request leave for tomorrow\n"
+                "• Or just describe your day in any language and I'll log it.")
+
+    # ── NEW TASK creation ──
+    NEW_PREFIXES = ("/newtask ", "/newtask\n", "/task ", "/task\n",
+                    "new task:", "newtask:", "add task:", "create task:", "task:")
+    raw = text.strip()
+    raw_low = raw.lower()
+    prefix_hit = None
+    for p in NEW_PREFIXES:
+        if raw_low.startswith(p):
+            prefix_hit = p; break
+    if cmd in ("/newtask", "/task", "newtask", "new task", "add task"):
+        return ("To add a task send:\n`/newtask Review Q4 budget by Friday, high priority`\n"
+                "Or simply: `new task: prep slides for Monday`")
+    if prefix_hit:
+        # Strip the prefix from the original text (preserve case)
+        body_text = raw[len(prefix_hit):].strip()
+        if not body_text:
+            return "Please include a title — e.g. `/newtask Prep deck for Monday`"
+        # Role gating mirrors POST /api/tasks
+        if role == "team_member":
+            return "Team Members can only create *shared* tasks. Please use the web app for that."
+        # Try AI extraction; fall back to plain title
+        title, priority, due_iso, task_type = body_text, "medium", None, "general"
+        ai_out = None
+        try:
+            ai_out = await asyncio.to_thread(
+                _gemini_call,
+                ("You extract task fields from one short message. Return strict JSON with keys: "
+                 "title (string), priority (low|medium|high|critical, default medium), "
+                 "due_date_iso (YYYY-MM-DD or null), task_type (technical|operational|hr|general, default general). "
+                 "If user says 'tomorrow' use tomorrow's date in ISO. Reply ONLY JSON."),
+                f"Today is {date.today().isoformat()}. Message: {body_text}",
+            )
+        except Exception:
+            ai_out = None
+        if ai_out:
+            t = ai_out.strip()
+            if t.startswith("```"):
+                parts = t.split("```")
+                if len(parts) >= 2:
+                    t = parts[1]
+                    if t.startswith("json"): t = t[4:]
+                    t = t.strip()
+            try:
+                data = json.loads(t)
+                title = (data.get("title") or body_text).strip()
+                pr = (data.get("priority") or "medium").lower()
+                if pr in ("low","medium","high","critical"):
+                    priority = pr
+                due_iso = data.get("due_date_iso")
+                tt = (data.get("task_type") or "general").lower()
+                if tt in ("technical","operational","hr","general"):
+                    task_type = tt
+            except Exception:
+                pass
+        # Employee cannot self-set Critical
+        if role == "employee" and priority == "critical":
+            priority = "high"
+        # Developer constraint: only technical tasks
+        if role == "developer" and task_type != "technical":
+            task_type = "technical"
+        tid = gen_id()
+        doc = {
+            "id": tid, "company_id": cid,
+            "title": title, "description": "",
+            "assigned_to_user_id": user["id"], "created_by_user_id": user["id"],
+            "team_id": user.get("team_id"),
+            "status": "todo", "priority": priority, "type": task_type,
+            "due_date": (datetime.fromisoformat(due_iso).isoformat() if due_iso else None),
+            "is_recurring": False, "recurrence_rule": None,
+            "is_shared": False, "shared_with_user_ids": [],
+            "blocker_text": None, "acknowledged_at": None, "archived": False,
+            "created_at": now_iso(), "updated_at": now_iso(),
+        }
+        await db.tasks.insert_one(doc)
+        await db.audit_log.insert_one({
+            "id": gen_id(), "company_id": cid, "action_type": "task_created",
+            "performed_by_user_id": user["id"], "target_user_id": user["id"], "task_id": tid,
+            "old_value": None, "new_value": {"title": title, "priority": priority, "via": "telegram"},
+            "reason": None, "timestamp": now_iso(),
+        })
+        due_str = f" · due {due_iso}" if due_iso else ""
+        return (f"✅ Task created\n"
+                f"*{title}*\n"
+                f"Priority: `{priority.upper()}` · Type: `{task_type}`{due_str}\n"
+                "Send /tasks to see your full list.")
 
     if cmd in ("my tasks", "/tasks", "tasks"):
         tasks = await db.tasks.find({"company_id": cid, "assigned_to_user_id": user["id"],
@@ -1163,6 +1261,7 @@ async def telegram_webhook(req: Request):
             f"✅ Telegram linked, {user['name']}! Your numeric chat id is `{chat_id}`.\n\n"
             "Try these commands:\n"
             "• /tasks — your open tasks\n"
+            "• /newtask <title> — add a new task (e.g. `/newtask Prep deck by Friday, high`)\n"
             "• /acknowledge — acknowledge a critical task\n"
             "• /leave — request leave for tomorrow\n"
             "• Or just type your daily update in any language."
