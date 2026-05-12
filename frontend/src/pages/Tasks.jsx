@@ -11,6 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Switch } from "../components/ui/switch";
 import { PlusIcon as Plus, MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react";
+import { LayoutGrid, Rows3 } from "lucide-react";
+import TaskDetailDialog from "../components/TaskDetailDialog";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/ui/table";
+import { Badge } from "../components/ui/badge";
 import { toast } from "sonner";
 
 const STATUSES = ["todo", "in_progress", "done", "blocked"];
@@ -23,6 +27,8 @@ export default function Tasks() {
   const [showCreate, setShowCreate] = useState(false);
   const [escalate, setEscalate] = useState(null);
   const [filter, setFilter] = useState({ q: "", priority: "", status: "" });
+  const [view, setView] = useState(() => localStorage.getItem("tasks_view") || "table");
+  const [detail, setDetail] = useState(null);
   // form
   const [form, setForm] = useState({
     title: "", description: "", assigned_to_user_id: "", type: "general",
@@ -66,7 +72,9 @@ export default function Tasks() {
   });
 
   // Kanban-like for developer
-  const isKanban = user.role === "developer";
+  const isKanban = view === "kanban" || (user.role === "developer" && view === "auto");
+  const peopleById = React.useMemo(() => Object.fromEntries(people.map((p) => [p.id, p])), [people]);
+  React.useEffect(() => { localStorage.setItem("tasks_view", view); }, [view]);
 
   return (
     <div className="space-y-6" data-testid="tasks-page">
@@ -98,6 +106,11 @@ export default function Tasks() {
             {STATUSES.map((s) => <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>)}
           </SelectContent>
         </Select>
+        <div className="flex bg-white border border-slate-200 rounded-md overflow-hidden">
+          <button onClick={() => setView("table")} className={`p-2 ${view === "table" ? "bg-slate-900 text-white" : "text-slate-500"}`} data-testid="view-table" title="Table"><Rows3 size={14} /></button>
+          <button onClick={() => setView("grid")} className={`p-2 ${view === "grid" ? "bg-slate-900 text-white" : "text-slate-500"}`} data-testid="view-grid" title="Cards"><LayoutGrid size={14} /></button>
+          <button onClick={() => setView("kanban")} className={`p-2 ${view === "kanban" ? "bg-slate-900 text-white" : "text-slate-500"}`} data-testid="view-kanban" title="Kanban">K</button>
+        </div>
       </div>
 
       {isKanban ? (
@@ -117,12 +130,59 @@ export default function Tasks() {
             );
           })}
         </div>
+      ) : view === "table" ? (
+        <div className="bg-white border border-slate-200 rounded-lg overflow-x-auto" data-testid="tasks-table">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead className="w-[100px]">Priority</TableHead>
+                <TableHead className="w-[110px]">Status</TableHead>
+                <TableHead className="w-[140px]">Assigned to</TableHead>
+                <TableHead className="w-[110px]">Type</TableHead>
+                <TableHead className="w-[110px]">Due</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500 py-8">No tasks match these filters.</TableCell></TableRow>}
+              {filtered.map((t) => {
+                const assignee = peopleById[t.assigned_to_user_id];
+                return (
+                  <TableRow key={t.id} onClick={() => setDetail(t)} className="cursor-pointer hover:bg-slate-50" data-testid={`task-row-${t.id}`}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span className="priority-dot" style={{ background: PRIORITY_COLOR[t.priority] }} />
+                        <span className="font-medium">{t.title}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="uppercase tracking-wider text-[10px]" style={{ borderColor: PRIORITY_COLOR[t.priority], color: PRIORITY_COLOR[t.priority] }}>{t.priority}</Badge>
+                    </TableCell>
+                    <TableCell><Badge variant="secondary" className="uppercase text-[10px]">{t.status.replace("_"," ")}</Badge></TableCell>
+                    <TableCell className="text-xs">{assignee?.name || "—"}</TableCell>
+                    <TableCell className="text-xs text-slate-500">{t.type}</TableCell>
+                    <TableCell className="text-xs">{t.due_date ? new Date(t.due_date).toLocaleDateString() : "—"}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((t) => <TaskCard key={t.id} task={t} onChange={load} onEscalate={setEscalate} />)}
           {filtered.length === 0 && <div className="text-sm text-slate-500 col-span-full text-center py-8">No tasks yet.</div>}
         </div>
       )}
+
+      <TaskDetailDialog
+        open={!!detail}
+        onOpenChange={(o) => !o && setDetail(null)}
+        task={detail}
+        peopleById={peopleById}
+        onChange={load}
+        onEscalate={setEscalate}
+      />
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent data-testid="create-task-dialog">

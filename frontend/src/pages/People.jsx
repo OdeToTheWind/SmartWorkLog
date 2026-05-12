@@ -7,8 +7,10 @@ import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { PlusIcon as Plus } from "@phosphor-icons/react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Pencil } from "lucide-react";
 import GdprPurgeDialog from "../components/GdprPurgeDialog";
+import EditPersonDialog from "../components/EditPersonDialog";
+import EditTeamDialog from "../components/EditTeamDialog";
 import { toast } from "sonner";
 
 const ROLES = ["hr", "supervisor", "developer", "team_member", "employee"];
@@ -51,6 +53,8 @@ export default function People() {
   // === Teams management ===
   const [showCreateTeam, setShowCreateTeam] = useState(false);
   const [teamForm, setTeamForm] = useState({ name: "", supervisor_id: "" });
+  const [editPerson, setEditPerson] = useState(null);
+  const [editTeam, setEditTeam] = useState(null);
   const createTeam = async () => {
     if (!teamForm.name) { toast.error("Team name required"); return; }
     try {
@@ -82,13 +86,22 @@ export default function People() {
               const sup = people.find((p) => p.id === t.supervisor_id);
               const memberCount = people.filter((p) => p.team_id === t.id).length;
               return (
-                <div key={t.id} className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm" data-testid={`team-${t.id}`}>
-                  <div className="font-medium">{t.name}</div>
+                <button
+                  key={t.id}
+                  onClick={() => canCreate && setEditTeam(t)}
+                  disabled={!canCreate}
+                  className={`bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-left ${canCreate ? "hover:bg-slate-100 hover:border-slate-300 cursor-pointer" : ""}`}
+                  data-testid={`team-${t.id}`}
+                >
+                  <div className="font-medium flex items-center gap-1">
+                    {t.name}
+                    {canCreate && <Pencil size={11} className="text-slate-400" />}
+                  </div>
                   <div className="text-xs text-slate-500">
                     {memberCount} member{memberCount !== 1 ? "s" : ""}
-                    {sup && <> · supervisor: {sup.name}</>}
+                    {sup && <> · sup: {sup.name}</>}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -110,16 +123,28 @@ export default function People() {
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               <span className="role-pill" style={{ background: `${ROLE_COLOR[p.role]}15`, color: ROLE_COLOR[p.role] }}>{ROLE_LABEL[p.role]}</span>
               {p.streak_count > 0 && <span className="text-xs text-slate-500">{p.streak_count}d streak</span>}
-              {canPurge && p.id !== user.user_id && p.role !== "super_admin" && (
-                <button
-                  onClick={() => setGdprTarget(p)}
-                  className="ml-auto text-red-500 hover:text-red-700 p-1 rounded"
-                  data-testid={`gdpr-btn-${p.id}`}
-                  title="GDPR — permanent delete"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
+              <div className="ml-auto flex gap-1">
+                {canCreate && p.id !== user.user_id && (
+                  <button
+                    onClick={() => setEditPerson(p)}
+                    className="text-slate-500 hover:text-slate-900 p-1 rounded"
+                    data-testid={`edit-btn-${p.id}`}
+                    title="Edit person"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                )}
+                {canPurge && p.id !== user.user_id && p.role !== "super_admin" && (
+                  <button
+                    onClick={() => setGdprTarget(p)}
+                    className="text-red-500 hover:text-red-700 p-1 rounded"
+                    data-testid={`gdpr-btn-${p.id}`}
+                    title="GDPR — permanent delete"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -220,6 +245,22 @@ export default function People() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <EditPersonDialog
+        open={!!editPerson}
+        onOpenChange={(o) => !o && setEditPerson(null)}
+        person={editPerson}
+        teams={teams}
+        supervisors={supervisors}
+        onSaved={load}
+      />
+      <EditTeamDialog
+        open={!!editTeam}
+        onOpenChange={(o) => !o && setEditTeam(null)}
+        team={editTeam}
+        supervisors={supervisors}
+        onSaved={load}
+      />
     </div>
   );
 }

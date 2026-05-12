@@ -352,6 +352,70 @@ async def update_my_profile(body: UserProfileIn, u: TokenUser = Depends(current_
     await db.users.update_one({"id": u.user_id}, {"$set": updates})
     return {"ok": True, "updated": updates}
 
+class AdminUserPatch(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    team_id: Optional[str] = None  # "" to clear
+    supervisor_id: Optional[str] = None  # "" to clear
+    timezone: Optional[str] = None
+    language: Optional[str] = None
+    telegram_username: Optional[str] = None
+    active: Optional[bool] = None
+
+@api.patch("/users/{user_id}")
+async def admin_update_user(user_id: str, body: AdminUserPatch, u: TokenUser = Depends(require_roles("super_admin", "hr"))):
+    target = await db.users.find_one({"id": user_id, "company_id": u.company_id}, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if u.role == "hr" and target.get("role") == "super_admin":
+        raise HTTPException(403, "HR cannot modify super_admin")
+    updates: Dict[str, Any] = {}
+    raw = body.model_dump()
+    for k, v in raw.items():
+        if v is None: continue
+        if k in ("team_id", "supervisor_id") and v == "":
+            updates[k] = None
+        elif k == "role" and v not in ROLES:
+            raise HTTPException(400, f"Invalid role {v}")
+        else:
+            updates[k] = v
+    if updates:
+        await db.users.update_one({"id": user_id}, {"$set": updates})
+        await audit(u.company_id, "user_updated", u.user_id, user_id, None,
+                    {k: target.get(k) for k in updates.keys()}, updates)
+    new_doc = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return new_doc
+
+class TeamPatchIn(BaseModel):
+    name: Optional[str] = None
+    supervisor_id: Optional[str] = None  # "" to clear
+
+@api.patch("/teams/{team_id}")
+async def update_team(team_id: str, body: TeamPatchIn, u: TokenUser = Depends(require_roles("super_admin", "hr"))):
+    team = await db.teams.find_one({"id": team_id, "company_id": u.company_id}, {"_id": 0})
+    if not team:
+        raise HTTPException(404, "Team not found")
+    updates: Dict[str, Any] = {}
+    if body.name is not None: updates["name"] = body.name
+    if body.supervisor_id is not None:
+        updates["supervisor_id"] = None if body.supervisor_id == "" else body.supervisor_id
+    if updates:
+        await db.teams.update_one({"id": team_id}, {"$set": updates})
+        await audit(u.company_id, "team_updated", u.user_id, None, None,
+                    {k: team.get(k) for k in updates.keys()}, updates)
+    return await db.teams.find_one({"id": team_id}, {"_id": 0})
+
+@api.delete("/teams/{team_id}")
+async def delete_team(team_id: str, u: TokenUser = Depends(require_roles("super_admin", "hr"))):
+    team = await db.teams.find_one({"id": team_id, "company_id": u.company_id}, {"_id": 0})
+    if not team:
+        raise HTTPException(404, "Team not found")
+    # Unset team_id on any members
+    moved = await db.users.update_many({"company_id": u.company_id, "team_id": team_id}, {"$set": {"team_id": None}})
+    await db.teams.delete_one({"id": team_id})
+    await audit(u.company_id, "team_deleted", u.user_id, None, None, team, None)
+    return {"ok": True, "members_unassigned": moved.modified_count}
+
 @api.post("/users")
 async def create_user(body: CreateUserIn, u: TokenUser = Depends(current_user)):
     if u.role not in ("super_admin", "hr"):
