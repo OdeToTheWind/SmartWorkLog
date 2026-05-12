@@ -21,6 +21,11 @@ JWT_SECRET = os.environ['JWT_SECRET']
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')  # MOCKED if empty
 MAKE_WEBHOOK_SECRET = os.environ.get('MAKE_WEBHOOK_SECRET', 'change-me-make-secret')
+MAKE_DIGEST_WEBHOOK_URL = os.environ.get('MAKE_DIGEST_WEBHOOK_URL', '')
+MAKE_WEEKLY_PDF_WEBHOOK_URL = os.environ.get('MAKE_WEEKLY_PDF_WEBHOOK_URL', '')
+SCHEDULER_ENABLED = os.environ.get('SCHEDULER_ENABLED', 'false').lower() == 'true'
+DIGEST_HOUR_UTC = int(os.environ.get('DIGEST_HOUR_UTC', '18'))
+PUBLIC_BASE_URL = os.environ.get('PUBLIC_BASE_URL', '')
 APP_NAME = "smart-worklog-ai"
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 storage_key: Optional[str] = None
@@ -907,6 +912,16 @@ async def tg_translate_reply(text: str, lang: str) -> str:
 async def _tg_handle_command(user: dict, text: str) -> str:
     """Returns the reply text. Handles role-aware commands."""
     cmd = text.strip().lower()
+    # Normalise slash commands → keyword form
+    SLASH_MAP = {
+        "/tasks": "my tasks", "/task": "my tasks", "/mytasks": "my tasks",
+        "/acknowledge": "acknowledge", "/ack": "acknowledge",
+        "/leave": "leave tomorrow", "/teamstatus": "team status",
+        "/teammood": "team mood today", "/pendingleaves": "pending leaves",
+        "/criticaltasks": "critical tasks",
+    }
+    if cmd in SLASH_MAP:
+        cmd = SLASH_MAP[cmd]
     role = user["role"]
     cid = user["company_id"]
     name = user["name"]
@@ -1050,6 +1065,137 @@ async def cron_generate_digest(company_id: str = Query(...), secret: str = Query
             tg_send(h["telegram_id"], f"*Daily Digest*\n\n{text}")
     return {"digest": text, "delivered_to": len(hrs)}
 
+def _push_to_make(url: str, payload: dict) -> bool:
+    if not url:
+        return False
+    try:
+        r = requests.post(url, json=payload, timeout=15)
+        return r.status_code < 400
+    except Exception as e:
+        log.warning(f"Make.com push failed: {e}")
+        return False
+
+async def _run_digest_for_all_companies():
+    """Internal helper: generate digest per company and push to Make.com webhook."""
+    companies = await db.companies.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
+    results = []
+    for c in companies:
+        try:
+            text = await ai_digest(c["id"])
+            hrs = await db.users.find({"company_id": c["id"], "role": "hr"}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "email": 1}).to_list(50)
+            for h in hrs:
+                await db.notifications.insert_one({"id": gen_id(), "company_id": c["id"], "user_id": h["id"],
+                                                    "type": "daily_digest", "message": text, "read": False,
+                                                    "related_task_id": None, "created_at": now_iso()})
+                if h.get("telegram_id"):
+                    tg_send(h["telegram_id"], f"*Daily Digest — {c['name']}*\n\n{text}")
+            _push_to_make(MAKE_DIGEST_WEBHOOK_URL, {
+                "type": "daily_digest", "company_id": c["id"], "company_name": c["name"],
+                "digest": text, "hr_recipients": [{"name": h["name"], "email": h.get("email"), "telegram_id": h.get("telegram_id")} for h in hrs],
+                "generated_at": now_iso(),
+            })
+            results.append({"company": c["name"], "ok": True})
+        except Exception as e:
+            log.exception(f"Digest failed for {c['id']}")
+            results.append({"company": c["name"], "ok": False, "error": str(e)})
+    return results
+
+async def _run_weekly_pdf_for_all_companies():
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import cm
+    companies = await db.companies.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
+    results = []
+    for c in companies:
+        try:
+            cid = c["id"]
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat()
+            ups = await db.daily_updates.find({"company_id": cid, "date": {"$gte": cutoff}}, {"_id": 0}).to_list(2000)
+            tasks_done = await db.tasks.count_documents({"company_id": cid, "status": "done", "updated_at": {"$gte": cutoff}})
+            blockers = sum(1 for u in ups if u.get("blocker_text"))
+            avg_mood = round(sum([u.get("mood_score",3) for u in ups])/len(ups), 2) if ups else 0
+            buf = io.BytesIO()
+            cv = canvas.Canvas(buf, pagesize=A4); w, h = A4; y = h - 2*cm
+            cv.setFont("Helvetica-Bold", 18); cv.drawString(2*cm, y, f"{c['name']} — Weekly Report"); y -= 1*cm
+            cv.setFont("Helvetica", 10); cv.drawString(2*cm, y, f"Week ending {date.today().isoformat()}"); y -= 1.2*cm
+            cv.setFont("Helvetica-Bold", 12); cv.drawString(2*cm, y, "Summary"); y -= 0.7*cm
+            cv.setFont("Helvetica", 11)
+            for line in [f"Daily updates submitted: {len(ups)}",
+                         f"Tasks completed: {tasks_done}",
+                         f"Blockers reported: {blockers}",
+                         f"Average mood (1-5): {avg_mood}"]:
+                cv.drawString(2.3*cm, y, line); y -= 0.6*cm
+            digest = await ai_digest(cid)
+            y -= 0.4*cm
+            cv.setFont("Helvetica-Bold", 12); cv.drawString(2*cm, y, "AI digest"); y -= 0.7*cm
+            cv.setFont("Helvetica", 10)
+            for chunk in [digest[i:i+95] for i in range(0, len(digest), 95)]:
+                cv.drawString(2.3*cm, y, chunk); y -= 0.5*cm
+                if y < 3*cm: break
+            cv.showPage(); cv.save()
+            pdf_bytes = buf.getvalue()
+            path = f"{APP_NAME}/{cid}/reports/{date.today().isoformat()}-{gen_id()[:8]}.pdf"
+            result = put_object(path, pdf_bytes, "application/pdf")
+            fid = gen_id()
+            await db.attachments.insert_one({
+                "id": fid, "company_id": cid, "user_id": "system",
+                "storage_path": result["path"], "original_filename": f"weekly-report-{date.today().isoformat()}.pdf",
+                "content_type": "application/pdf", "size": len(pdf_bytes),
+                "task_id": None, "daily_update_date": None,
+                "is_deleted": False, "created_at": now_iso(), "report": True,
+            })
+            file_url = f"{PUBLIC_BASE_URL}/api/files/{fid}" if PUBLIC_BASE_URL else f"/api/files/{fid}"
+            hrs = await db.users.find({"company_id": cid, "role": "hr"}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "email": 1}).to_list(50)
+            for hr_u in hrs:
+                await db.notifications.insert_one({"id": gen_id(), "company_id": cid, "user_id": hr_u["id"],
+                                                    "type": "weekly_report", "read": False,
+                                                    "message": f"Weekly PDF report ready",
+                                                    "related_task_id": None, "created_at": now_iso()})
+                if hr_u.get("telegram_id"):
+                    tg_send(hr_u["telegram_id"], f"Weekly report ready 📊\n{file_url}")
+            _push_to_make(MAKE_WEEKLY_PDF_WEBHOOK_URL, {
+                "type": "weekly_pdf", "company_id": cid, "company_name": c["name"],
+                "file_id": fid, "file_url": file_url, "size_bytes": len(pdf_bytes),
+                "stats": {"updates": len(ups), "tasks_done": tasks_done, "blockers": blockers, "avg_mood": avg_mood},
+                "hr_recipients": [{"name": hr_u["name"], "email": hr_u.get("email"), "telegram_id": hr_u.get("telegram_id")} for hr_u in hrs],
+                "generated_at": now_iso(),
+            })
+            results.append({"company": c["name"], "ok": True, "file_id": fid})
+        except Exception as e:
+            log.exception(f"Weekly PDF failed for {c.get('id')}")
+            results.append({"company": c.get("name"), "ok": False, "error": str(e)})
+    return results
+
+@api.post("/admin/run-digest-now")
+async def admin_run_digest(u: TokenUser = Depends(require_roles("super_admin", "hr"))):
+    """Manually trigger digest for this company (testing helper)."""
+    text = await ai_digest(u.company_id)
+    company = await db.companies.find_one({"id": u.company_id}, {"_id": 0, "name": 1}) or {"name": "?"}
+    hrs = await db.users.find({"company_id": u.company_id, "role": "hr"}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "email": 1}).to_list(50)
+    for h in hrs:
+        await db.notifications.insert_one({"id": gen_id(), "company_id": u.company_id, "user_id": h["id"],
+                                            "type": "daily_digest", "message": text, "read": False,
+                                            "related_task_id": None, "created_at": now_iso()})
+        if h.get("telegram_id"):
+            tg_send(h["telegram_id"], f"*Daily Digest*\n\n{text}")
+    pushed = _push_to_make(MAKE_DIGEST_WEBHOOK_URL, {
+        "type": "daily_digest", "company_id": u.company_id, "company_name": company["name"],
+        "digest": text, "hr_recipients": [{"name": h["name"], "email": h.get("email"), "telegram_id": h.get("telegram_id")} for h in hrs],
+        "generated_at": now_iso(),
+    })
+    return {"digest": text, "make_pushed": pushed, "hr_count": len(hrs)}
+
+@api.post("/admin/run-weekly-pdf-now")
+async def admin_run_weekly(u: TokenUser = Depends(require_roles("super_admin", "hr"))):
+    """Manually trigger weekly PDF for this company."""
+    # Reuse the all-companies helper logic but filtered
+    # Quick approach: temporarily run for one company
+    old = await db.companies.find({"id": u.company_id}, {"_id": 0}).to_list(1)
+    # We just call the global runner; not the cheapest but simple
+    res = await _run_weekly_pdf_for_all_companies()
+    mine = [r for r in res if r.get("ok")]
+    return {"results": res, "succeeded": len(mine)}
+
 @api.post("/cron/generate-weekly-pdf")
 async def cron_weekly_pdf(company_id: str = Query(...), secret: str = Query(...)):
     """Called by Make.com Friday 6pm. Generates PDF report, uploads to storage, returns URL."""
@@ -1187,6 +1333,31 @@ async def gdpr_purge(user_id: str, body: GDPRConfirm, u: TokenUser = Depends(req
 @app.on_event("startup")
 async def _startup():
     init_storage()
+    if SCHEDULER_ENABLED:
+        try:
+            from apscheduler.schedulers.asyncio import AsyncIOScheduler
+            from apscheduler.triggers.cron import CronTrigger
+            sched = AsyncIOScheduler(timezone="UTC")
+            # Daily digest Mon-Fri at DIGEST_HOUR_UTC
+            sched.add_job(_run_digest_for_all_companies, CronTrigger(day_of_week="mon-fri", hour=DIGEST_HOUR_UTC, minute=0), id="daily_digest", replace_existing=True)
+            # Weekly PDF Friday at DIGEST_HOUR_UTC
+            sched.add_job(_run_weekly_pdf_for_all_companies, CronTrigger(day_of_week="fri", hour=DIGEST_HOUR_UTC, minute=5), id="weekly_pdf", replace_existing=True)
+            sched.start()
+            log.info(f"Scheduler started: daily digest Mon-Fri {DIGEST_HOUR_UTC}:00 UTC, weekly PDF Fri {DIGEST_HOUR_UTC}:05 UTC")
+        except Exception as e:
+            log.warning(f"Scheduler failed to start: {e}")
+    # Configure Telegram webhook automatically if token + base URL are set
+    if TELEGRAM_BOT_TOKEN and PUBLIC_BASE_URL:
+        try:
+            wh = f"{PUBLIC_BASE_URL}/api/telegram/webhook"
+            r = requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook",
+                              json={"url": wh}, timeout=10)
+            if r.status_code == 200:
+                log.info(f"Telegram webhook set → {wh}")
+            else:
+                log.warning(f"Telegram setWebhook failed: {r.text[:200]}")
+        except Exception as e:
+            log.warning(f"Telegram setWebhook error: {e}")
 
 app.include_router(api)
 app.add_middleware(
