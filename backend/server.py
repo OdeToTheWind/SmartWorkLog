@@ -923,23 +923,66 @@ async def delete_file(file_id: str, u: TokenUser = Depends(current_user)):
     await db.attachments.update_one({"id": file_id}, {"$set": {"is_deleted": True}})
     return {"ok": True}
 
-# ---------- TELEGRAM BOT (MOCKED — works once TELEGRAM_BOT_TOKEN env set) ----------
+# ---------- TELEGRAM BOT (live once TELEGRAM_BOT_TOKEN env set) ----------
 class TelegramLinkIn(BaseModel):
-    telegram_id: str
+    telegram_id: Optional[str] = None  # backward compat: legacy field
+    telegram_username: Optional[str] = None  # @handle (without or with @)
+    telegram_chat_id: Optional[str] = None  # numeric chat_id
 
 @api.post("/telegram/link")
 async def link_telegram(body: TelegramLinkIn, u: TokenUser = Depends(current_user)):
-    """Link a Telegram chat_id to the current user. Frontend calls this from the Profile screen."""
-    await db.users.update_one({"id": u.user_id}, {"$set": {"telegram_id": body.telegram_id}})
-    return {"ok": True}
+    """Link Telegram identity to current user. Accepts username and/or numeric chat_id.
+    `telegram_id` (legacy) is treated as username if it starts with '@', else as chat_id."""
+    updates: Dict[str, Any] = {}
+    if body.telegram_username:
+        updates["telegram_username"] = _norm_tg_username(body.telegram_username)
+    if body.telegram_chat_id:
+        updates["telegram_chat_id"] = str(body.telegram_chat_id).strip()
+    if body.telegram_id:
+        v = body.telegram_id.strip()
+        if v.startswith("@"):
+            updates["telegram_username"] = _norm_tg_username(v)
+        elif v.lstrip("-").isdigit():
+            updates["telegram_chat_id"] = v
+        else:
+            # Keep raw on legacy field for visibility
+            updates["telegram_id"] = v
+    if not updates:
+        raise HTTPException(400, "Provide telegram_username and/or telegram_chat_id")
+    await db.users.update_one({"id": u.user_id}, {"$set": updates})
+    return {"ok": True, "updated": updates}
+
+def _norm_tg_username(u: str) -> str:
+    """Normalise '@QuestSong' / 'QuestSong' → '@questsong' (lowercase, leading @)."""
+    if not u: return u
+    u = u.strip()
+    if not u.startswith("@"):
+        u = "@" + u
+    return u.lower()
+
+def _tg_chat_id_of(user: dict) -> Optional[str]:
+    """Return the best chat_id we have for a user (numeric preferred)."""
+    cid = user.get("telegram_chat_id") or user.get("telegram_id")
+    if not cid:
+        return None
+    cid = str(cid).strip()
+    return cid if (cid.lstrip("-").isdigit() or cid.startswith("@")) else None
 
 def tg_send(chat_id: str, text: str) -> bool:
+    """Send a Telegram message. chat_id must be numeric — fail silently for usernames/phones."""
     if not TELEGRAM_BOT_TOKEN:
         log.info(f"[TG MOCK] → {chat_id}: {text[:120]}")
         return False
+    if not chat_id:
+        return False
+    cid = str(chat_id).strip()
+    # Bot API requires numeric chat_id for private users (or @channel for channels)
+    if not (cid.lstrip("-").isdigit() or cid.startswith("@")):
+        log.info(f"[TG SKIP] non-numeric chat_id '{cid}' — waiting for /start to capture it")
+        return False
     try:
         r = requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-                          json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+                          json={"chat_id": cid, "text": text, "parse_mode": "Markdown"},
                           timeout=10)
         return r.status_code == 200
     except Exception as e:
@@ -1060,18 +1103,76 @@ async def _tg_handle_command(user: dict, text: str) -> str:
 
 @api.post("/telegram/webhook")
 async def telegram_webhook(req: Request):
-    """Telegram sends updates here. Configure via setWebhook once you have a bot token.
-    MOCKED behaviour: still processes the message (DB writes happen) but won't send a real reply."""
+    """Telegram inbound updates. Auto-captures numeric chat_id when a known-username user sends /start."""
     body = await req.json()
     msg = body.get("message") or body.get("edited_message") or {}
-    chat_id = str(msg.get("chat", {}).get("id", ""))
+    chat = msg.get("chat") or {}
+    frm = msg.get("from") or {}
+    chat_id = str(chat.get("id", "")) if chat.get("id") is not None else ""
+    username_raw = frm.get("username") or chat.get("username") or ""
+    username = _norm_tg_username(username_raw) if username_raw else ""
     text = msg.get("text", "")
     if not chat_id or not text:
         return {"ok": True, "ignored": True}
-    user = await db.users.find_one({"telegram_id": chat_id}, {"_id": 0})
+
+    # 1) Look up by numeric chat_id
+    user = await db.users.find_one({"telegram_chat_id": chat_id}, {"_id": 0})
+    auto_captured = False
+
+    # 2) Fall back to legacy telegram_id storing the numeric id
     if not user:
-        tg_send(chat_id, "I don't recognise this Telegram account. Please link it in your Profile inside the WorkLog app first.")
-        return {"ok": True, "unlinked": True}
+        user = await db.users.find_one({"telegram_id": chat_id}, {"_id": 0})
+        if user:
+            # Migrate: also write to telegram_chat_id
+            await db.users.update_one({"id": user["id"]}, {"$set": {"telegram_chat_id": chat_id}})
+            user["telegram_chat_id"] = chat_id
+
+    # 3) Auto-capture: look up by username and bind numeric chat_id
+    if not user and username:
+        user = await db.users.find_one(
+            {"$or": [
+                {"telegram_username": username},
+                {"telegram_id": username},  # legacy field may hold "@handle"
+            ]},
+            {"_id": 0},
+        )
+        if user:
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$set": {"telegram_chat_id": chat_id, "telegram_username": username}},
+            )
+            user["telegram_chat_id"] = chat_id
+            user["telegram_username"] = username
+            auto_captured = True
+            log.info(f"[TG AUTO-LINK] @{username_raw} → chat_id {chat_id} → user {user.get('email')}")
+
+    if not user:
+        tg_send(
+            chat_id,
+            "Hi! I don't recognise this Telegram account yet.\n\n"
+            "1. Open the WorkLog app → History/Profile page\n"
+            f"2. Set your Telegram username to *@{username_raw}* (or paste this chat id: `{chat_id}`)\n"
+            "3. Then send /start again — I'll bind automatically."
+        )
+        return {"ok": True, "unlinked": True, "captured_username": username_raw, "chat_id": chat_id}
+
+    # If auto-captured + this is /start, send a friendly welcome
+    cmd = text.strip().lower()
+    if auto_captured and cmd in ("/start", "start", "hi", "hello"):
+        welcome = (
+            f"✅ Telegram linked, {user['name']}! Your numeric chat id is `{chat_id}`.\n\n"
+            "Try these commands:\n"
+            "• /tasks — your open tasks\n"
+            "• /acknowledge — acknowledge a critical task\n"
+            "• /leave — request leave for tomorrow\n"
+            "• Or just type your daily update in any language."
+        )
+        lang = user.get("language", "en")
+        if lang != "en":
+            welcome = await tg_translate_reply(welcome, lang)
+        tg_send(chat_id, welcome)
+        return {"ok": True, "auto_linked": True, "chat_id": chat_id, "user_email": user.get("email")}
+
     try:
         reply = await _tg_handle_command(user, text)
     except Exception as e:
@@ -1081,7 +1182,7 @@ async def telegram_webhook(req: Request):
     if lang and lang != "en":
         reply = await tg_translate_reply(reply, lang)
     tg_send(chat_id, reply)
-    return {"ok": True, "mocked": not bool(TELEGRAM_BOT_TOKEN)}
+    return {"ok": True, "mocked": not bool(TELEGRAM_BOT_TOKEN), "auto_linked": auto_captured}
 
 # ---------- MAKE.COM CRON ENDPOINTS ----------
 def _require_make_secret(secret: str):
@@ -1106,7 +1207,7 @@ async def cron_generate_digest(company_id: Optional[str] = Query(None), secret: 
     if tz:
         # Find HRs in this timezone
         hr_users = await db.users.find({"timezone": tz, "role": {"$in": ["hr", "super_admin"]}, "active": True},
-                                        {"_id": 0, "id": 1, "name": 1, "company_id": 1, "telegram_id": 1, "email": 1}).to_list(500)
+                                        {"_id": 0, "id": 1, "name": 1, "company_id": 1, "telegram_id": 1, "telegram_chat_id": 1, "telegram_username": 1, "email": 1}).to_list(500)
         if not hr_users:
             return {"ok": True, "timezone": tz, "hr_users_matched": 0, "results": []}
         results = []
@@ -1121,7 +1222,7 @@ async def cron_generate_digest(company_id: Optional[str] = Query(None), secret: 
                                                     "type": "daily_digest", "message": text, "read": False,
                                                     "related_task_id": None, "created_at": now_iso()})
                 if h.get("telegram_id"):
-                    tg_send(h["telegram_id"], f"*Daily Digest — {company['name']}*\n\n{text}")
+                    tg_send(_tg_chat_id_of(h), f"*Daily Digest — {company['name']}*\n\n{text}")
             _push_to_make(MAKE_DIGEST_WEBHOOK_URL, {
                 "type": "daily_digest", "company_id": cid, "company_name": company["name"],
                 "timezone": tz, "digest": text,
@@ -1135,16 +1236,16 @@ async def cron_generate_digest(company_id: Optional[str] = Query(None), secret: 
     if not company_id:
         raise HTTPException(400, "company_id required when no timezone provided")
     text = await ai_digest(company_id)
-    hrs = await db.users.find({"company_id": company_id, "role": {"$in": ["hr", "super_admin"]}}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "email": 1}).to_list(50)
+    hrs = await db.users.find({"company_id": company_id, "role": {"$in": ["hr", "super_admin"]}}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "telegram_chat_id": 1, "telegram_username": 1, "email": 1}).to_list(50)
     for h in hrs:
         await db.notifications.insert_one({"id": gen_id(), "company_id": company_id, "user_id": h["id"],
                                             "type": "daily_digest", "message": text, "read": False,
                                             "related_task_id": None, "created_at": now_iso()})
         if h.get("telegram_id"):
-            tg_send(h["telegram_id"], f"*Daily Digest*\n\n{text}")
+            tg_send(_tg_chat_id_of(h), f"*Daily Digest*\n\n{text}")
     _push_to_make(MAKE_DIGEST_WEBHOOK_URL, {
         "type": "daily_digest", "company_id": company_id, "digest": text,
-        "hr_recipients": [{"name": h["name"], "email": h.get("email"), "telegram_id": h.get("telegram_id")} for h in hrs],
+        "hr_recipients": [{"name": h["name"], "email": h.get("email"), "telegram_id": h.get("telegram_id"), "telegram_chat_id": h.get("telegram_chat_id"), "telegram_username": h.get("telegram_username")} for h in hrs],
         "generated_at": now_iso(),
     })
     return {"digest": text, "delivered_to": len(hrs)}
@@ -1166,13 +1267,13 @@ async def _run_digest_for_all_companies():
     for c in companies:
         try:
             text = await ai_digest(c["id"])
-            hrs = await db.users.find({"company_id": c["id"], "role": "hr"}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "email": 1}).to_list(50)
+            hrs = await db.users.find({"company_id": c["id"], "role": "hr"}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "telegram_chat_id": 1, "telegram_username": 1, "email": 1}).to_list(50)
             for h in hrs:
                 await db.notifications.insert_one({"id": gen_id(), "company_id": c["id"], "user_id": h["id"],
                                                     "type": "daily_digest", "message": text, "read": False,
                                                     "related_task_id": None, "created_at": now_iso()})
                 if h.get("telegram_id"):
-                    tg_send(h["telegram_id"], f"*Daily Digest — {c['name']}*\n\n{text}")
+                    tg_send(_tg_chat_id_of(h), f"*Daily Digest — {c['name']}*\n\n{text}")
             _push_to_make(MAKE_DIGEST_WEBHOOK_URL, {
                 "type": "daily_digest", "company_id": c["id"], "company_name": c["name"],
                 "digest": text, "hr_recipients": [{"name": h["name"], "email": h.get("email"), "telegram_id": h.get("telegram_id")} for h in hrs],
@@ -1229,14 +1330,14 @@ async def _run_weekly_pdf_for_all_companies():
                 "is_deleted": False, "created_at": now_iso(), "report": True,
             })
             file_url = f"{PUBLIC_BASE_URL}/api/files/{fid}" if PUBLIC_BASE_URL else f"/api/files/{fid}"
-            hrs = await db.users.find({"company_id": cid, "role": "hr"}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "email": 1}).to_list(50)
+            hrs = await db.users.find({"company_id": cid, "role": "hr"}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "telegram_chat_id": 1, "telegram_username": 1, "email": 1}).to_list(50)
             for hr_u in hrs:
                 await db.notifications.insert_one({"id": gen_id(), "company_id": cid, "user_id": hr_u["id"],
                                                     "type": "weekly_report", "read": False,
                                                     "message": f"Weekly PDF report ready",
                                                     "related_task_id": None, "created_at": now_iso()})
                 if hr_u.get("telegram_id"):
-                    tg_send(hr_u["telegram_id"], f"Weekly report ready 📊\n{file_url}")
+                    tg_send(_tg_chat_id_of(hr_u), f"Weekly report ready 📊\n{file_url}")
             _push_to_make(MAKE_WEEKLY_PDF_WEBHOOK_URL, {
                 "type": "weekly_pdf", "company_id": cid, "company_name": c["name"],
                 "file_id": fid, "file_url": file_url, "size_bytes": len(pdf_bytes),
@@ -1255,16 +1356,16 @@ async def admin_run_digest(u: TokenUser = Depends(require_roles("super_admin", "
     """Manually trigger digest for this company (testing helper)."""
     text = await ai_digest(u.company_id)
     company = await db.companies.find_one({"id": u.company_id}, {"_id": 0, "name": 1}) or {"name": "?"}
-    hrs = await db.users.find({"company_id": u.company_id, "role": "hr"}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "email": 1}).to_list(50)
+    hrs = await db.users.find({"company_id": u.company_id, "role": "hr"}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "telegram_chat_id": 1, "telegram_username": 1, "email": 1}).to_list(50)
     for h in hrs:
         await db.notifications.insert_one({"id": gen_id(), "company_id": u.company_id, "user_id": h["id"],
                                             "type": "daily_digest", "message": text, "read": False,
                                             "related_task_id": None, "created_at": now_iso()})
         if h.get("telegram_id"):
-            tg_send(h["telegram_id"], f"*Daily Digest*\n\n{text}")
+            tg_send(_tg_chat_id_of(h), f"*Daily Digest*\n\n{text}")
     pushed = _push_to_make(MAKE_DIGEST_WEBHOOK_URL, {
         "type": "daily_digest", "company_id": u.company_id, "company_name": company["name"],
-        "digest": text, "hr_recipients": [{"name": h["name"], "email": h.get("email"), "telegram_id": h.get("telegram_id")} for h in hrs],
+        "digest": text, "hr_recipients": [{"name": h["name"], "email": h.get("email"), "telegram_id": h.get("telegram_id"), "telegram_chat_id": h.get("telegram_chat_id"), "telegram_username": h.get("telegram_username")} for h in hrs],
         "generated_at": now_iso(),
     })
     return {"digest": text, "make_pushed": pushed, "hr_count": len(hrs)}
@@ -1335,7 +1436,7 @@ async def cron_weekly_pdf(company_id: str = Query(...), secret: str = Query(...)
                                             "message": f"Weekly PDF report ready: /api/files/{fid}",
                                             "related_task_id": None, "created_at": now_iso()})
         if h.get("telegram_id"):
-            tg_send(h["telegram_id"], f"Weekly report ready 📊")
+            tg_send(_tg_chat_id_of(h), f"Weekly report ready 📊")
     return {"ok": True, "file_id": fid, "size": len(pdf_bytes)}
 
 # ---------- HR CRITICAL SLA WIDGET ----------
