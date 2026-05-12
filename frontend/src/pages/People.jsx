@@ -48,12 +48,52 @@ export default function People() {
   const [gdprTarget, setGdprTarget] = useState(null);
   const canPurge = ["hr", "super_admin"].includes(user.role);
 
+  // === Teams management ===
+  const [showCreateTeam, setShowCreateTeam] = useState(false);
+  const [teamForm, setTeamForm] = useState({ name: "", supervisor_id: "" });
+  const createTeam = async () => {
+    if (!teamForm.name) { toast.error("Team name required"); return; }
+    try {
+      const payload = { name: teamForm.name };
+      if (teamForm.supervisor_id) payload.supervisor_id = teamForm.supervisor_id;
+      await api.post("/teams", payload);
+      toast.success("Team created");
+      setShowCreateTeam(false);
+      setTeamForm({ name: "", supervisor_id: "" });
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
   return (
     <div className="space-y-6" data-testid="people-page">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold tracking-tight">People</h1>
-        {canCreate && <Button onClick={() => setShowCreate(true)} data-testid="create-user-btn"><Plus size={16} className="mr-1" /> Add person</Button>}
+        <div className="flex gap-2">
+          {canCreate && <Button variant="outline" onClick={() => setShowCreateTeam(true)} data-testid="create-team-btn"><Plus size={16} className="mr-1" /> New team</Button>}
+          {canCreate && <Button onClick={() => setShowCreate(true)} data-testid="create-user-btn"><Plus size={16} className="mr-1" /> Add person</Button>}
+        </div>
       </div>
+
+      {teams.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-lg p-4" data-testid="teams-section">
+          <div className="label-eyebrow mb-3">Teams ({teams.length})</div>
+          <div className="flex flex-wrap gap-2">
+            {teams.map((t) => {
+              const sup = people.find((p) => p.id === t.supervisor_id);
+              const memberCount = people.filter((p) => p.team_id === t.id).length;
+              return (
+                <div key={t.id} className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm" data-testid={`team-${t.id}`}>
+                  <div className="font-medium">{t.name}</div>
+                  <div className="text-xs text-slate-500">
+                    {memberCount} member{memberCount !== 1 ? "s" : ""}
+                    {sup && <> · supervisor: {sup.name}</>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {people.map((p) => (
@@ -149,6 +189,37 @@ export default function People() {
         </DialogContent>
       </Dialog>
       <GdprPurgeDialog open={!!gdprTarget} onOpenChange={(o) => !o && setGdprTarget(null)} user={gdprTarget} onPurged={load} />
+
+      <Dialog open={showCreateTeam} onOpenChange={setShowCreateTeam}>
+        <DialogContent data-testid="create-team-dialog">
+          <DialogHeader><DialogTitle>Create new team</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Team name</Label>
+              <Input value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} placeholder="e.g. Engineering, Marketing, Customer Success" data-testid="team-name-input" />
+            </div>
+            <div>
+              <Label>Supervisor (optional)</Label>
+              <Select value={teamForm.supervisor_id || "none"} onValueChange={(v) => setTeamForm({ ...teamForm, supervisor_id: v === "none" ? "" : v })}>
+                <SelectTrigger data-testid="team-supervisor-select"><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {supervisors.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <div className="text-xs text-slate-500 mt-1">
+                {supervisors.length === 0
+                  ? "No supervisors yet — create one first via 'Add person' with role=Supervisor"
+                  : `${supervisors.length} supervisor${supervisors.length === 1 ? "" : "s"} available`}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateTeam(false)}>Cancel</Button>
+            <Button onClick={createTeam} data-testid="team-create-submit">Create team</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
