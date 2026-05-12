@@ -1,0 +1,113 @@
+{
+  "theme": "light",
+  "archetype": "Archetype 4 (Swiss & High-Contrast)",
+  "rationale": "SaaS Workforce Dashboard requiring authority, high legibility, and clear data hierarchy. Strict structural monochrome base allowing the user-mandated role colors and critical alerts to instantly draw focus.",
+  "colors": {
+    "background": {
+      "default": "#FAFAFA",
+      "surface": "#FFFFFF",
+      "surface_hover": "#F1F5F9",
+      "glass": "rgba(255, 255, 255, 0.8)"
+    },
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#475569",
+      "tertiary": "#94A3B8",
+      "inverse": "#FFFFFF"
+    },
+    "border": {
+      "default": "#E2E8F0",
+      "focus": "#94A3B8",
+      "alert": "rgba(220, 38, 38, 0.5)"
+    },
+    "roles": {
+      "Employee": "#7C3AED",
+      "Team Member": "#2563EB",
+      "Developer": "#0D9488",
+      "Supervisor": "#4F46E5",
+      "HR": "#16A34A"
+    },
+    "status": {
+      "critical": "#DC2626",
+      "high": "#D97706",
+      "medium": "#0284C7",
+      "low": "#64748B",
+      "done": "#10B981"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "headings": "'Work Sans', sans-serif",
+      "body": "'IBM Plex Sans', sans-serif",
+      "mono": "'JetBrains Mono', monospace"
+    },
+    "scales": {
+      "h1": "text-4xl sm:text-5xl tracking-tight leading-none font-bold",
+      "h2": "text-2xl sm:text-3xl tracking-tight leading-tight font-semibold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-medium",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "label": "text-xs tracking-[0.2em] uppercase font-semibold text-slate-500"
+    }
+  },
+  "layout": {
+    "strategy": "Control Room Grid",
+    "sidebar": "w-64 fixed left-0 top-0 h-screen border-r border-slate-200 bg-white z-40",
+    "main_content": "ml-0 sm:ml-64 p-4 sm:p-8 min-h-screen bg-slate-50",
+    "bento_grid": {
+      "base": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6",
+      "span_hero": "col-span-1 md:col-span-3 lg:col-span-4",
+      "span_chart": "col-span-1 md:col-span-2",
+      "span_widget": "col-span-1"
+    },
+    "spacing": "Generous inner padding for cards (p-6) with tight grid gaps (gap-4/6)"
+  },
+  "components": {
+    "cards": "Flat background (bg-white), 1px subtle border (border-slate-200), no drop shadow by default. Hover adds shadow-sm and -translate-y-[1px]. rounded-lg or rounded-xl max.",
+    "buttons": "Sharp corners or subtle rounded-md. Primary CTA uses role-based color if specific to role, else Slate-900. High contrast text.",
+    "inputs": "Shadcn defaults customized with 1px border-slate-300, focus:ring-2 focus:ring-slate-400. bg-white.",
+    "critical_alert_banner": "Fixed top-0 left-0 w-full z-50 backdrop-blur-xl bg-white/90 border-b-2 border-red-600 p-4 flex justify-between items-center shadow-lg",
+    "kanban_board": "Horizontal scrolling container. Columns are bg-slate-100 rounded-lg p-2. Cards are bg-white, border border-slate-200, cursor-grab.",
+    "avatar": "Square or slight rounded-md for modern SaaS feel, rather than circles.",
+    "badges": "Inline-flex, items-center, px-2 py-0.5 rounded text-xs font-medium bg-opacity-10 border"
+  },
+  "motion": {
+    "critical_pulse": "animate-pulse bg-red-100 border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.5)]",
+    "hover_card": "transition-all duration-200 hover:shadow-md hover:border-slate-300",
+    "stagger_list": "Framer motion staggered entry for dashboard widgets and audit log rows"
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "style": "weight='regular' for UI, weight='fill' for active sidebar links"
+  },
+  "instructions_to_main_agent": [
+    "Use Phosphor icons: yarn add @phosphor-icons/react",
+    "Use Recharts for mood trends: yarn add recharts",
+    "Use standard Shadcn components but strip excessive rounding and shadows to match E1 rules.",
+    "Ensure 'Critical' escalation tasks pop a modal with mandatory 10+ char reason.",
+    "Data structure must heavily depend on 'company_id' scoped context.",
+    "Apply test IDs strictly (e.g., data-testid='escalation-reason-input').",
+    "Sidebar navigation hidden on mobile behind hamburger menu, ALWAYS visible on desktop.",
+    "Do not use transparent background on header. Overlap must be handled with margin/padding."
+  ],
+  "image_urls": {
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1744956581253-abfd023141b1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTN8MHwxfHNlYXJjaHw0fHxwcm9mZXNzaW9uYWwlMjBhdmF0YXIlMjBwb3J0cmFpdHxlbnwwfHx8fDE3Nzg1NzI5NTJ8MA&ixlib=rb-4.1.0&q=85",
+        "category": "Employee Avatar 1",
+        "description": "Young woman in suit smiling"
+      },
+      {
+        "url": "https://images.pexels.com/photos/36899429/pexels-photo-36899429.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "Employee Avatar 2",
+        "description": "Confident man in professional attire"
+      }
+    ],
+    "gamification": [
+      {
+        "url": "https://images.unsplash.com/photo-1667984673761-ae13293c9572?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNTl8MHwxfHNlYXJjaHwyfHxnb2xkJTIwdHJvcGh5JTIwYmFkZ2UlMjAzZHxlbnwwfHx8fDE3Nzg1NzI5NTZ8MA&ixlib=rb-4.1.0&q=85",
+        "category": "Streak/Leaderboard Badge",
+        "description": "Gold 3D object representation for gamification"
+      }
+    ]
+  }
+}
