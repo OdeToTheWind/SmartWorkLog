@@ -19,6 +19,7 @@ MONGO_URL = os.environ['MONGO_URL']
 DB_NAME = os.environ['DB_NAME']
 JWT_SECRET = os.environ['JWT_SECRET']
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')  # MOCKED if empty
 MAKE_WEBHOOK_SECRET = os.environ.get('MAKE_WEBHOOK_SECRET', 'change-me-make-secret')
 MAKE_DIGEST_WEBHOOK_URL = os.environ.get('MAKE_DIGEST_WEBHOOK_URL', '')
@@ -202,33 +203,56 @@ async def notify(company_id: str, user_id: str, type_: str, message: str, relate
         "created_at": now_iso(),
     })
 
-# ---------- AI (Gemini 2.5 Flash) ----------
-async def ai_parse_update(raw_message: str, known_tasks: List[dict]) -> dict:
-    """Use Gemini to parse the raw daily update text. Returns dict with mood_score, urgency, summary, ai_reply, language."""
+# ---------- AI (Gemini 2.5 Flash — direct Google API) ----------
+_gemini_configured = False
+def _ensure_gemini():
+    global _gemini_configured
+    if _gemini_configured:
+        return True
+    if not GEMINI_API_KEY:
+        return False
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        _gemini_configured = True
+        return True
     except Exception as e:
-        log.warning(f"emergentintegrations not available: {e}")
-        return {"mood_score": 3, "urgency": "low", "summary": raw_message[:140], "ai_reply": "Update logged.", "language": "en"}
-    if not EMERGENT_LLM_KEY:
-        return {"mood_score": 3, "urgency": "low", "summary": raw_message[:140], "ai_reply": "Update logged.", "language": "en"}
+        log.warning(f"Gemini configure failed: {e}")
+        return False
 
+def _gemini_call(system: str, prompt: str) -> Optional[str]:
+    """Synchronous Gemini call wrapped so callers can await via asyncio.to_thread."""
+    if not _ensure_gemini():
+        return None
+    try:
+        import google.generativeai as genai
+        model = genai.GenerativeModel(model_name="gemini-2.5-flash", system_instruction=system)
+        resp = model.generate_content(prompt)
+        return (resp.text or "").strip()
+    except Exception as e:
+        log.warning(f"Gemini call failed: {e}")
+        return None
+
+async def ai_parse_update(raw_message: str, known_tasks: List[dict]) -> dict:
+    """Parse a daily-update text. Returns mood_score/urgency/summary/ai_reply/language."""
     task_list_str = "\n".join([f"- {t['id']}: {t['title']}" for t in known_tasks[:30]])
-    sys = (
+    system = (
         "You are a workforce assistant. Parse an employee's daily update message and return strict JSON with keys: "
         "mood_score (int 1-5), urgency (low|medium|high), summary (one sentence), ai_reply (warm 2-sentence reply in user's language), "
         "language (ISO code: en/hi/ar/ur/bn/fr/sw). Reply ONLY with JSON, no markdown."
     )
     prompt = f"Known tasks:\n{task_list_str}\n\nEmployee message:\n{raw_message}\n\nReturn JSON only."
-    try:
-        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"parse-{gen_id()}", system_message=sys).with_model("gemini", "gemini-2.5-flash")
-        resp = await chat.send_message(UserMessage(text=prompt))
-        text = resp.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
+    text = await asyncio.to_thread(_gemini_call, system, prompt)
+    if not text:
+        return {"mood_score": 3, "urgency": "low", "summary": raw_message[:140], "ai_reply": "Update logged.", "language": "en"}
+    if text.startswith("```"):
+        parts = text.split("```")
+        if len(parts) >= 2:
+            text = parts[1]
             if text.startswith("json"):
                 text = text[4:]
             text = text.strip()
+    try:
         data = json.loads(text)
         return {
             "mood_score": int(data.get("mood_score", 3)),
@@ -238,7 +262,7 @@ async def ai_parse_update(raw_message: str, known_tasks: List[dict]) -> dict:
             "language": data.get("language", "en"),
         }
     except Exception as e:
-        log.warning(f"AI parse failed: {e}")
+        log.warning(f"AI parse JSON decode failed: {e}; raw='{text[:200]}'")
         return {"mood_score": 3, "urgency": "low", "summary": raw_message[:140], "ai_reply": "Update logged.", "language": "en"}
 
 async def ai_digest(company_id: str) -> str:
@@ -247,15 +271,24 @@ async def ai_digest(company_id: str) -> str:
     tasks_open = await db.tasks.count_documents({"company_id": company_id, "status": {"$ne": "done"}, "archived": {"$ne": True}})
     crit = await db.tasks.count_documents({"company_id": company_id, "priority": "critical", "status": {"$ne": "done"}, "archived": {"$ne": True}})
     avg_mood = sum([u.get("mood_score", 3) for u in updates]) / len(updates) if updates else 0
-    summary = f"Updates today: {len(updates)} | Avg mood: {avg_mood:.1f}/5 | Open tasks: {tasks_open} | Critical: {crit}"
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"digest-{gen_id()}", system_message="You are an HR assistant. Write a 3-sentence digest based on today's stats. Plain English.").with_model("gemini", "gemini-2.5-flash")
-        resp = await chat.send_message(UserMessage(text=summary))
-        return resp.strip()
-    except Exception as e:
-        log.warning(f"AI digest failed: {e}")
-        return summary
+    raw_summary = f"Updates today: {len(updates)} | Avg mood: {avg_mood:.1f}/5 | Open tasks: {tasks_open} | Critical: {crit}"
+    text = await asyncio.to_thread(
+        _gemini_call,
+        "You are an HR assistant. Write a friendly, plain-English 3-sentence digest based on today's workforce stats. No data dump.",
+        raw_summary,
+    )
+    return text or raw_summary
+
+async def tg_translate_reply(text: str, lang: str) -> str:
+    if lang in ("en", "", None):
+        return text
+    out = await asyncio.to_thread(
+        _gemini_call,
+        f"Translate the user's text naturally into language code '{lang}'. Reply ONLY with the translation.",
+        text,
+    )
+    return out or text
+
 
 # ---------- ROUTES: AUTH ----------
 @api.get("/")
@@ -304,6 +337,21 @@ async def me(u: TokenUser = Depends(current_user)):
     return user
 
 # ---------- ROUTES: USERS / TEAMS ----------
+class UserProfileIn(BaseModel):
+    name: Optional[str] = None
+    timezone: Optional[str] = None
+    language: Optional[str] = None
+    telegram_id: Optional[str] = None
+    notification_prefs: Optional[Dict[str, Any]] = None
+
+@api.patch("/users/me")
+async def update_my_profile(body: UserProfileIn, u: TokenUser = Depends(current_user)):
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        return {"ok": True}
+    await db.users.update_one({"id": u.user_id}, {"$set": updates})
+    return {"ok": True, "updated": updates}
+
 @api.post("/users")
 async def create_user(body: CreateUserIn, u: TokenUser = Depends(current_user)):
     if u.role not in ("super_admin", "hr"):
@@ -898,17 +946,6 @@ def tg_send(chat_id: str, text: str) -> bool:
         log.warning(f"TG send failed: {e}")
         return False
 
-async def tg_translate_reply(text: str, lang: str) -> str:
-    if lang in ("en", "", None):
-        return text
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"tg-{gen_id()}",
-                       system_message=f"Translate the user's text naturally into language code '{lang}'. Reply ONLY with the translation.").with_model("gemini", "gemini-2.5-flash")
-        return (await chat.send_message(UserMessage(text=text))).strip()
-    except Exception:
-        return text
-
 async def _tg_handle_command(user: dict, text: str) -> str:
     """Returns the reply text. Handles role-aware commands."""
     cmd = text.strip().lower()
@@ -1052,17 +1089,64 @@ def _require_make_secret(secret: str):
         raise HTTPException(401, "Invalid Make.com webhook secret")
 
 @api.post("/cron/generate-digest")
-async def cron_generate_digest(company_id: str = Query(...), secret: str = Query(...)):
-    """Called by Make.com at 6pm. Returns digest text and posts to HR notification."""
+async def cron_generate_digest(company_id: Optional[str] = Query(None), secret: str = Query(...), req: Request = None):
+    """Called by Make.com. Two modes:
+    1. Legacy: ?company_id=...&secret=... → digest for one company.
+    2. Timezone mode: secret + body {"timezone": "Asia/Kolkata"} → digest for every company that has at least one HR/super_admin in that timezone, delivered to those HRs.
+    """
     _require_make_secret(secret)
+    tz = None
+    try:
+        if req:
+            body = await req.json()
+            tz = body.get("timezone")
+    except Exception:
+        tz = None
+
+    if tz:
+        # Find HRs in this timezone
+        hr_users = await db.users.find({"timezone": tz, "role": {"$in": ["hr", "super_admin"]}, "active": True},
+                                        {"_id": 0, "id": 1, "name": 1, "company_id": 1, "telegram_id": 1, "email": 1}).to_list(500)
+        if not hr_users:
+            return {"ok": True, "timezone": tz, "hr_users_matched": 0, "results": []}
+        results = []
+        by_company: Dict[str, list] = {}
+        for h in hr_users:
+            by_company.setdefault(h["company_id"], []).append(h)
+        for cid, hrs in by_company.items():
+            company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {"name": "?"}
+            text = await ai_digest(cid)
+            for h in hrs:
+                await db.notifications.insert_one({"id": gen_id(), "company_id": cid, "user_id": h["id"],
+                                                    "type": "daily_digest", "message": text, "read": False,
+                                                    "related_task_id": None, "created_at": now_iso()})
+                if h.get("telegram_id"):
+                    tg_send(h["telegram_id"], f"*Daily Digest — {company['name']}*\n\n{text}")
+            _push_to_make(MAKE_DIGEST_WEBHOOK_URL, {
+                "type": "daily_digest", "company_id": cid, "company_name": company["name"],
+                "timezone": tz, "digest": text,
+                "hr_recipients": [{"name": h["name"], "email": h.get("email"), "telegram_id": h.get("telegram_id")} for h in hrs],
+                "generated_at": now_iso(),
+            })
+            results.append({"company": company["name"], "hr_count": len(hrs), "digest_chars": len(text)})
+        return {"ok": True, "timezone": tz, "companies": len(by_company), "hr_users_matched": len(hr_users), "results": results}
+
+    # Legacy single-company mode
+    if not company_id:
+        raise HTTPException(400, "company_id required when no timezone provided")
     text = await ai_digest(company_id)
-    hrs = await db.users.find({"company_id": company_id, "role": "hr"}, {"_id": 0, "id": 1, "telegram_id": 1}).to_list(50)
+    hrs = await db.users.find({"company_id": company_id, "role": {"$in": ["hr", "super_admin"]}}, {"_id": 0, "id": 1, "name": 1, "telegram_id": 1, "email": 1}).to_list(50)
     for h in hrs:
         await db.notifications.insert_one({"id": gen_id(), "company_id": company_id, "user_id": h["id"],
                                             "type": "daily_digest", "message": text, "read": False,
                                             "related_task_id": None, "created_at": now_iso()})
         if h.get("telegram_id"):
             tg_send(h["telegram_id"], f"*Daily Digest*\n\n{text}")
+    _push_to_make(MAKE_DIGEST_WEBHOOK_URL, {
+        "type": "daily_digest", "company_id": company_id, "digest": text,
+        "hr_recipients": [{"name": h["name"], "email": h.get("email"), "telegram_id": h.get("telegram_id")} for h in hrs],
+        "generated_at": now_iso(),
+    })
     return {"digest": text, "delivered_to": len(hrs)}
 
 def _push_to_make(url: str, payload: dict) -> bool:
