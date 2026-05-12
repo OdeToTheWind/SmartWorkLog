@@ -7,7 +7,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 import { Textarea } from "../components/ui/textarea";
 import { Label } from "../components/ui/label";
-import { Trophy, Fire, Sparkle } from "@phosphor-icons/react";
+import { TrophyIcon as Trophy, FireIcon as Fire, SparkleIcon as Sparkle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 

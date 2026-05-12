@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth, ROLE_COLOR, ROLE_LABEL } from "../lib/auth";
 import {
-  House, ListChecks, Users, Bell, Calendar, ChartLineUp,
-  ClipboardText, SignOut, List, X, Trophy, ShieldCheck, KanbanSimple
+  HouseIcon as House, ListChecksIcon as ListChecks, UsersIcon as Users, BellIcon as Bell, CalendarIcon as Calendar, ChartLineUpIcon as ChartLineUp,
+  ClipboardTextIcon as ClipboardText, SignOutIcon as SignOut, ListIcon as List, XIcon as X, TrophyIcon as Trophy, ShieldCheckIcon as ShieldCheck, KanbanIcon as Kanban
 } from "@phosphor-icons/react";
 
 const NAV_BY_ROLE = {
@@ -22,7 +22,7 @@ const NAV_BY_ROLE = {
     { to: "/leave", label: "Leave", icon: Calendar },
   ],
   developer: [
-    { to: "/", label: "Kanban", icon: KanbanSimple },
+    { to: "/", label: "Kanban", icon: Kanban },
     { to: "/tasks", label: "All Tasks", icon: ListChecks },
     { to: "/daily-update", label: "Daily Update", icon: ClipboardText },
     { to: "/notifications", label: "Notifications", icon: Bell },

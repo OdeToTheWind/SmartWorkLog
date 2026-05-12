@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { Button } from "./ui/button";
-import { Warning } from "@phosphor-icons/react";
+import { WarningIcon as Warning } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 /* Shows a fixed-top critical alert banner for any unacknowledged critical task assigned to current user */

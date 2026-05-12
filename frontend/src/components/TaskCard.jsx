@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { PRIORITY_COLOR } from "../lib/auth";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { CheckCircle, Clock, Warning, ArrowUp } from "@phosphor-icons/react";
+import { CheckCircleIcon as CheckCircle, ClockIcon as Clock, WarningIcon as Warning, ArrowUpIcon as ArrowUp } from "@phosphor-icons/react";
 import { api } from "../lib/api";
 import { toast } from "sonner";
 

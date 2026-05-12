@@ -6,7 +6,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { toast } from "sonner";
-import { Sparkle } from "@phosphor-icons/react";
+import { SparkleIcon as Sparkle } from "@phosphor-icons/react";
 
 export default function DailyUpdate() {
   const { user } = useAuth();

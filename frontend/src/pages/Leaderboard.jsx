@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { ROLE_COLOR, ROLE_LABEL } from "../lib/auth";
-import { Trophy, Fire } from "@phosphor-icons/react";
+import { TrophyIcon as Trophy, FireIcon as Fire } from "@phosphor-icons/react";
 
 export default function Leaderboard() {
   const [rows, setRows] = useState([]);

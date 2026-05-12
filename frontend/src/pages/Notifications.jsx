@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { Bell, CheckCircle } from "@phosphor-icons/react";
+import { BellIcon as Bell, CheckCircleIcon as CheckCircle } from "@phosphor-icons/react";
 import { Button } from "../components/ui/button";
 
 export default function Notifications() {

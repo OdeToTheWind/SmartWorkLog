@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
-import { Plus } from "@phosphor-icons/react";
+import { PlusIcon as Plus } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 const ROLES = ["hr", "supervisor", "developer", "team_member", "employee"];
