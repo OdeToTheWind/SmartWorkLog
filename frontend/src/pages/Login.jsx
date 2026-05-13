@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
+import ApkDownloadBanner from "../components/ApkDownloadBanner";
 import { toast } from "sonner";
 
 export default function Login() {
@@ -43,6 +44,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950 p-4">
       <div className="w-full max-w-md">
+        <div className="mb-4"><ApkDownloadBanner /></div>
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-3">
             <div className="w-10 h-10 rounded-md flex items-center justify-center font-bold text-white" style={{ background: "#0F172A" }}>W</div>

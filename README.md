@@ -85,7 +85,6 @@ Full APK build + distribution guide: [`PLAYSTORE_UPLOAD.md`](./PLAYSTORE_UPLOAD.
 - Priority escalation flow — must give a reason + "sacrifice" when bumping a task to *critical*
 - Three views: **Table**, **Kanban**, **Grid**
 - Attachments via Emergent object storage (10 MB each)
-- One-way Jira sync (read-only mirror of your assigned Jira issues)
 
 ### People & Teams
 - **Self-service password change** (lock icon in sidebar) — required current password, strength meter
@@ -223,14 +222,13 @@ A condensed view. Every endpoint is under `/api/` and (except auth) requires `Au
 | POST   | `/cron/generate-weekly-pdf`       | Called by Make.com on schedule                                              |
 | POST   | `/telegram/webhook`               | Inbound Telegram bot updates                                                |
 
-### Jira integration (P1)
+### APK distribution (temporary, internal testing)
 | Method | Path                              | Description                                                                 |
 | ------ | --------------------------------- | --------------------------------------------------------------------------- |
-| GET    | `/integrations/jira/status`       | Whether server is configured & current user is connected                    |
-| GET    | `/integrations/jira/auth-url`     | Atlassian authorize URL with CSRF state                                     |
-| POST   | `/integrations/jira/callback`     | `{code, state}` → exchanges auth code, stores tokens                        |
-| POST   | `/integrations/jira/sync`         | Pulls assigned Jira issues (up to 200) → mirrors as technical tasks         |
-| POST   | `/integrations/jira/disconnect`   | Deletes stored tokens                                                       |
+| GET    | `/download/apk-status`            | Public — returns `{available, size_bytes, size_mb, updated_at}`              |
+| GET    | `/download/apk`                   | Public — serves `app-release-signed.apk` if present, 404 otherwise          |
+
+Frontend banner (`ApkDownloadBanner`) auto-shows on Login + every authenticated page when the APK file is uploaded to `/app/android/app-release-signed.apk`. Remove this facility once distribution moves to a permanent channel (Drive link, Play Store, MDM).
 
 Full API documentation with request/response examples lives in the codebase at `/app/backend/server.py` (search for `@api.`).
 
@@ -295,17 +293,7 @@ The backend also has an in-process **APScheduler** fallback that runs the same c
 
 ## Jira integration
 
-OAuth 2.0 (3LO) flow, **read-only one-way sync**:
-
-1. Set `JIRA_CLIENT_ID`, `JIRA_CLIENT_SECRET`, `JIRA_REDIRECT_URI` in `backend/.env`
-2. User on `/integrations` → clicks **Connect Jira** → Atlassian consent → returns to app
-3. User clicks **Sync now** → up to 200 of their unfinished Jira issues mirror into the **Tasks** table with `external_source: "jira"`
-4. Priority mapping: Highest→Critical, High→High, Medium→Medium, Low/Lowest→Low
-5. Status mapping: New→todo, In Progress→in_progress, Done→done
-
-Jira remains the source of truth — local edits on synced tasks get overwritten on next sync. Tokens auto-refresh via stored `offline_access` refresh tokens.
-
-Setup guide in [`ENV_REFERENCE.md`](./ENV_REFERENCE.md#jira-integration--step-by-step-setup).
+> **Removed in February 2026 per user request.** All `/api/integrations/jira/*` routes, the `JIRA_*` env vars, the Integrations page, and the sidebar nav entry have been removed. The code is recoverable from git history if you ever want to re-enable it.
 
 ---
 

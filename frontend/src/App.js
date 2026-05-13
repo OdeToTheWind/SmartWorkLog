@@ -16,7 +16,6 @@ import AuditLog from "./pages/AuditLog";
 import Leaderboard from "./pages/Leaderboard";
 import DailyUpdate from "./pages/DailyUpdate";
 import History from "./pages/History";
-import Integrations from "./pages/Integrations";
 import { Toaster } from "./components/ui/sonner";
 import "@/App.css";
 
@@ -50,8 +49,6 @@ function App() {
               <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
               <Route path="/daily-update" element={<Protected><DailyUpdate /></Protected>} />
               <Route path="/history" element={<Protected><History /></Protected>} />
-              <Route path="/integrations" element={<Protected><Integrations /></Protected>} />
-              <Route path="/integrations/jira/callback" element={<Protected><Integrations /></Protected>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>

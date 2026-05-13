@@ -72,7 +72,8 @@ Build a full-stack workforce daily-update and task management system with AI int
 - React Native Android app
 
 ## Next action items
-- **User redeploy needed** (P0): redeploy production so the new `sw.js` v3 ships → resolves the white-screen / MIME-type errors users are seeing on `task-intelligence-13.emergent.host`. Currently-stuck users only need a single hard-refresh (Ctrl/Cmd+Shift+R) once the new SW is live.
-- **User to-do (APK distribution)**: on your laptop, `cd /app/android && ./build.sh` → produces `app-release-signed.apk`. Distribute via Drive/Slack/QR per `PLAYSTORE_UPLOAD.md`. (Play Store path is documented but explicitly deferred.)
-- (Optional) Refactor `/app/backend/server.py` (1,900+ lines) into modular FastAPI routers — deferred at user request
+- **User action (P0)**: Redeploy production so `sw.js` v3 + the PWA icons + the APK download endpoint reach `task-intelligence-13.emergent.host`. Without this redeploy, the white-screen and missing-icons issues persist.
+- **User action (laptop)**: `cd /app/android && ./build.sh` on a JDK 17 + Node 18 laptop → produces `app-release-signed.apk`. Upload that file to `/app/android/app-release-signed.apk` in Emergent → the APK Download banner immediately appears for every user inside the app.
+- (Optional) Refactor `/app/backend/server.py` (~1,900 lines) into modular routers
+) into modular FastAPI routers — deferred at user request
 - (Optional) Add Trello / Asana adapters alongside Jira

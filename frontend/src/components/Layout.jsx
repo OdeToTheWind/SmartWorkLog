@@ -5,10 +5,11 @@ import { useTheme } from "../lib/theme";
 import {
   HouseIcon as House, ListChecksIcon as ListChecks, UsersIcon as Users, BellIcon as Bell, CalendarIcon as Calendar, ChartLineUpIcon as ChartLineUp,
   ClipboardTextIcon as ClipboardText, SignOutIcon as SignOut, ListIcon as List, XIcon as X, TrophyIcon as Trophy, ShieldCheckIcon as ShieldCheck, KanbanIcon as Kanban,
-  LockKeyIcon as LockKey, EnvelopeSimpleIcon as Envelope, SunIcon as Sun, MoonIcon as Moon, DesktopIcon as Desktop, PlugsConnectedIcon as PlugConnected
+  LockKeyIcon as LockKey, EnvelopeSimpleIcon as Envelope, SunIcon as Sun, MoonIcon as Moon, DesktopIcon as Desktop
 } from "@phosphor-icons/react";
 import ChangePasswordDialog from "./ChangePasswordDialog";
 import ChangeEmailDialog from "./ChangeEmailDialog";
+import ApkDownloadBanner from "./ApkDownloadBanner";
 
 const NAV_BY_ROLE = {
   employee: [
@@ -33,7 +34,6 @@ const NAV_BY_ROLE = {
     { to: "/daily-update", label: "Daily Update", icon: ClipboardText },
     { to: "/history", label: "History", icon: ChartLineUp },
     { to: "/notifications", label: "Notifications", icon: Bell },
-    { to: "/integrations", label: "Integrations", icon: PlugConnected },
     { to: "/audit", label: "Audit", icon: ShieldCheck },
   ],
   supervisor: [
@@ -52,7 +52,6 @@ const NAV_BY_ROLE = {
     { to: "/leave", label: "Leave", icon: Calendar },
     { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
     { to: "/history", label: "History", icon: House },
-    { to: "/integrations", label: "Integrations", icon: PlugConnected },
     { to: "/audit", label: "Audit Log", icon: ShieldCheck },
     { to: "/notifications", label: "Notifications", icon: Bell },
   ],
@@ -60,7 +59,6 @@ const NAV_BY_ROLE = {
     { to: "/", label: "Overview", icon: ChartLineUp },
     { to: "/people", label: "People", icon: Users },
     { to: "/tasks", label: "Tasks", icon: ListChecks },
-    { to: "/integrations", label: "Integrations", icon: PlugConnected },
     { to: "/audit", label: "Audit Log", icon: ShieldCheck },
   ],
 };
@@ -181,6 +179,7 @@ export default function Layout({ children }) {
       )}
 
       <main className="lg:ml-64 p-4 sm:p-8 min-h-screen">
+        <div className="mb-4"><ApkDownloadBanner /></div>
         {children}
       </main>
 

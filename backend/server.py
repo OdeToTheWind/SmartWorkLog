@@ -24,10 +24,6 @@ TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')  # MOCKED if empty
 MAKE_WEBHOOK_SECRET = os.environ.get('MAKE_WEBHOOK_SECRET', 'change-me-make-secret')
 MAKE_DIGEST_WEBHOOK_URL = os.environ.get('MAKE_DIGEST_WEBHOOK_URL', '')
 MAKE_WEEKLY_PDF_WEBHOOK_URL = os.environ.get('MAKE_WEEKLY_PDF_WEBHOOK_URL', '')
-JIRA_CLIENT_ID = os.environ.get('JIRA_CLIENT_ID', '')
-JIRA_CLIENT_SECRET = os.environ.get('JIRA_CLIENT_SECRET', '')
-JIRA_REDIRECT_URI = os.environ.get('JIRA_REDIRECT_URI', '')
-JIRA_OAUTH_STATE_SECRET = os.environ.get('JIRA_OAUTH_STATE_SECRET', 'jira-state-change-me')
 SCHEDULER_ENABLED = os.environ.get('SCHEDULER_ENABLED', 'false').lower() == 'true'
 DIGEST_HOUR_UTC = int(os.environ.get('DIGEST_HOUR_UTC', '18'))
 PUBLIC_BASE_URL = os.environ.get('PUBLIC_BASE_URL', '')
@@ -1873,209 +1869,35 @@ async def _startup():
         except Exception as e:
             log.warning(f"Telegram setWebhook error: {e}")
 
-# ---------- ROUTES: JIRA OAUTH (one-way external→WorkLog sync, read-only) ----------
-import secrets as _secrets
-import httpx as _httpx
-from urllib.parse import urlencode as _urlencode
+# Jira integration was removed per user request — see git history for the OAuth/sync code.
 
-JIRA_AUTH_URL = "https://auth.atlassian.com/authorize"
-JIRA_TOKEN_URL = "https://auth.atlassian.com/oauth/token"
-JIRA_RESOURCES_URL = "https://api.atlassian.com/oauth/token/accessible-resources"
-JIRA_SCOPES = "read:jira-work read:jira-user offline_access"
+# ---------- ROUTES: APK DOWNLOAD (temporary, for internal testing) ----------
+from fastapi.responses import FileResponse as _FileResponse
 
-class JiraCallbackIn(BaseModel):
-    code: str
-    state: str
+APK_PATH = "/app/android/app-release-signed.apk"
 
-def _jira_configured() -> bool:
-    return bool(JIRA_CLIENT_ID and JIRA_CLIENT_SECRET and JIRA_REDIRECT_URI)
+@api.get("/download/apk-status")
+async def apk_status():
+    """Public — returns whether the APK is currently available for download."""
+    import os.path as _osp
+    if _osp.exists(APK_PATH):
+        size = _osp.getsize(APK_PATH)
+        mtime = datetime.fromtimestamp(_osp.getmtime(APK_PATH), tz=timezone.utc).isoformat()
+        return {"available": True, "size_bytes": size, "size_mb": round(size / 1024 / 1024, 2), "updated_at": mtime}
+    return {"available": False}
 
-@api.get("/integrations/jira/status")
-async def jira_status(u: TokenUser = Depends(current_user)):
-    integ = await db.jira_integrations.find_one({"user_id": u.user_id}, {"_id": 0, "access_token": 0, "refresh_token": 0})
-    return {
-        "configured": _jira_configured(),
-        "connected": bool(integ),
-        "site": integ.get("site_name") if integ else None,
-        "email": integ.get("jira_email") if integ else None,
-        "last_synced_at": integ.get("last_synced_at") if integ else None,
-        "issue_count": integ.get("issue_count", 0) if integ else 0,
-    }
-
-@api.get("/integrations/jira/auth-url")
-async def jira_auth_url(u: TokenUser = Depends(current_user)):
-    if not _jira_configured():
-        raise HTTPException(503, "Jira integration is not configured on the server. See ENV_REFERENCE.md.")
-    state = _secrets.token_urlsafe(24)
-    await db.jira_oauth_states.insert_one({
-        "state": state, "user_id": u.user_id, "company_id": u.company_id,
-        "created_at": now_iso(),
-    })
-    params = {
-        "audience": "api.atlassian.com",
-        "client_id": JIRA_CLIENT_ID,
-        "scope": JIRA_SCOPES,
-        "redirect_uri": JIRA_REDIRECT_URI,
-        "state": state,
-        "response_type": "code",
-        "prompt": "consent",
-    }
-    return {"auth_url": f"{JIRA_AUTH_URL}?{_urlencode(params)}"}
-
-@api.post("/integrations/jira/callback")
-async def jira_callback(body: JiraCallbackIn, u: TokenUser = Depends(current_user)):
-    if not _jira_configured():
-        raise HTTPException(503, "Jira integration not configured")
-    state_row = await db.jira_oauth_states.find_one({"state": body.state, "user_id": u.user_id}, {"_id": 0})
-    if not state_row:
-        raise HTTPException(400, "Invalid or expired state token")
-    await db.jira_oauth_states.delete_one({"state": body.state})
-
-    async with _httpx.AsyncClient(timeout=20) as cx:
-        tok_resp = await cx.post(JIRA_TOKEN_URL, json={
-            "grant_type": "authorization_code",
-            "client_id": JIRA_CLIENT_ID,
-            "client_secret": JIRA_CLIENT_SECRET,
-            "code": body.code,
-            "redirect_uri": JIRA_REDIRECT_URI,
-        })
-        if tok_resp.status_code != 200:
-            raise HTTPException(400, f"Token exchange failed: {tok_resp.text[:200]}")
-        tok = tok_resp.json()
-        res_resp = await cx.get(JIRA_RESOURCES_URL, headers={"Authorization": f"Bearer {tok['access_token']}"})
-        if res_resp.status_code != 200 or not res_resp.json():
-            raise HTTPException(400, "Could not fetch accessible Jira resources")
-        site = res_resp.json()[0]
-        cloud_id = site["id"]
-        site_name = site.get("name") or site.get("url")
-        api_base = f"https://api.atlassian.com/ex/jira/{cloud_id}"
-        me_resp = await cx.get(f"{api_base}/rest/api/3/myself", headers={"Authorization": f"Bearer {tok['access_token']}"})
-        me = me_resp.json() if me_resp.status_code == 200 else {}
-
-    expires_at = (datetime.now(timezone.utc) + timedelta(seconds=int(tok.get("expires_in", 3600)))).isoformat()
-    await db.jira_integrations.update_one(
-        {"user_id": u.user_id},
-        {"$set": {
-            "user_id": u.user_id,
-            "company_id": u.company_id,
-            "access_token": tok["access_token"],
-            "refresh_token": tok.get("refresh_token"),
-            "expires_at": expires_at,
-            "cloud_id": cloud_id,
-            "site_name": site_name,
-            "api_base": api_base,
-            "jira_account_id": me.get("accountId"),
-            "jira_email": me.get("emailAddress"),
-            "jira_display_name": me.get("displayName"),
-            "connected_at": now_iso(),
-            "issue_count": 0,
-        }},
-        upsert=True,
+@api.get("/download/apk")
+async def download_apk():
+    """Public download endpoint for the Smart WorkLog Android APK.
+    Returns 404 if the build artifact hasn't been uploaded yet."""
+    import os.path as _osp
+    if not _osp.exists(APK_PATH):
+        raise HTTPException(404, "APK not yet built. Run `cd /app/android && ./build.sh` on your laptop, then upload app-release-signed.apk to /app/android/")
+    return _FileResponse(
+        APK_PATH,
+        media_type="application/vnd.android.package-archive",
+        filename="SmartWorkLog.apk",
     )
-    await audit(u.company_id, "jira_connected", u.user_id, u.user_id, None, None, {"site": site_name})
-    return {"ok": True, "site": site_name, "email": me.get("emailAddress")}
-
-async def _jira_get_valid_token(user_id: str) -> Optional[dict]:
-    integ = await db.jira_integrations.find_one({"user_id": user_id}, {"_id": 0})
-    if not integ:
-        return None
-    try:
-        exp = datetime.fromisoformat(integ["expires_at"])
-    except Exception:
-        exp = datetime.now(timezone.utc) - timedelta(seconds=1)
-    if exp - datetime.now(timezone.utc) > timedelta(seconds=120):
-        return integ
-    if not integ.get("refresh_token"):
-        return None
-    async with _httpx.AsyncClient(timeout=20) as cx:
-        r = await cx.post(JIRA_TOKEN_URL, json={
-            "grant_type": "refresh_token",
-            "client_id": JIRA_CLIENT_ID,
-            "client_secret": JIRA_CLIENT_SECRET,
-            "refresh_token": integ["refresh_token"],
-        })
-        if r.status_code != 200:
-            await db.jira_integrations.delete_one({"user_id": user_id})
-            return None
-        t = r.json()
-    new_exp = (datetime.now(timezone.utc) + timedelta(seconds=int(t.get("expires_in", 3600)))).isoformat()
-    await db.jira_integrations.update_one({"user_id": user_id}, {"$set": {
-        "access_token": t["access_token"],
-        "refresh_token": t.get("refresh_token", integ["refresh_token"]),
-        "expires_at": new_exp,
-    }})
-    integ.update({"access_token": t["access_token"], "expires_at": new_exp})
-    return integ
-
-@api.post("/integrations/jira/sync")
-async def jira_sync(u: TokenUser = Depends(current_user)):
-    integ = await _jira_get_valid_token(u.user_id)
-    if not integ:
-        raise HTTPException(404, "Not connected to Jira — connect first")
-    if u.role not in ("developer", "team_member", "supervisor", "hr", "super_admin"):
-        raise HTTPException(403, "Role not allowed to sync Jira")
-    headers = {"Authorization": f"Bearer {integ['access_token']}", "Accept": "application/json"}
-    jql = "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC"
-    issues_in = []
-    start_at = 0
-    async with _httpx.AsyncClient(timeout=20) as cx:
-        while True:
-            r = await cx.get(
-                f"{integ['api_base']}/rest/api/3/search",
-                params={"jql": jql, "startAt": start_at, "maxResults": 50, "fields": "summary,description,status,priority,duedate,issuetype,updated"},
-                headers=headers,
-            )
-            if r.status_code != 200:
-                raise HTTPException(502, f"Jira API error: {r.status_code} {r.text[:200]}")
-            data = r.json()
-            issues_in.extend(data.get("issues", []))
-            if start_at + len(data.get("issues", [])) >= data.get("total", 0) or len(issues_in) >= 200:
-                break
-            start_at += 50
-
-    upserted = 0
-    site_base = (integ.get("site_name") or "").rstrip("/")
-    for it in issues_in:
-        f = it.get("fields", {})
-        prio = (f.get("priority") or {}).get("name", "Medium").lower()
-        prio_map = {"highest": "critical", "high": "high", "medium": "medium", "low": "low", "lowest": "low"}
-        prio_w = prio_map.get(prio, "medium")
-        status_name = ((f.get("status") or {}).get("statusCategory") or {}).get("key", "new")
-        status_w = {"new": "todo", "indeterminate": "in_progress", "done": "done"}.get(status_name, "todo")
-        due = f.get("duedate")
-        external_id = f"jira:{it['key']}"
-        await db.tasks.update_one(
-            {"company_id": u.company_id, "external_id": external_id},
-            {"$set": {
-                "id": gen_id() if not await db.tasks.find_one({"external_id": external_id, "company_id": u.company_id}, {"_id": 0, "id": 1}) else None,
-                "company_id": u.company_id,
-                "title": f"[{it['key']}] {f.get('summary', '')[:140]}",
-                "description": (f.get("description") or {}) if isinstance(f.get("description"), dict) else str(f.get("description") or ""),
-                "assigned_to_user_id": u.user_id,
-                "created_by_user_id": u.user_id,
-                "type": "technical",
-                "priority": prio_w,
-                "status": status_w,
-                "due_date": due,
-                "is_recurring": False, "is_shared": False, "shared_with_user_ids": [],
-                "external_id": external_id,
-                "external_source": "jira",
-                "external_url": f"{site_base}/browse/{it['key']}" if site_base else None,
-                "updated_at": now_iso(),
-            }, "$setOnInsert": {"created_at": now_iso(), "archived": False}},
-            upsert=True,
-        )
-        upserted += 1
-    await db.jira_integrations.update_one({"user_id": u.user_id},
-        {"$set": {"last_synced_at": now_iso(), "issue_count": upserted}})
-    await audit(u.company_id, "jira_sync", u.user_id, u.user_id, None, None, {"issues": upserted})
-    return {"ok": True, "synced": upserted}
-
-@api.post("/integrations/jira/disconnect")
-async def jira_disconnect(u: TokenUser = Depends(current_user)):
-    res = await db.jira_integrations.delete_one({"user_id": u.user_id})
-    await audit(u.company_id, "jira_disconnected", u.user_id, u.user_id, None, None, {"deleted": res.deleted_count})
-    return {"ok": True, "deleted": res.deleted_count}
 
 app.include_router(api)
 app.add_middleware(

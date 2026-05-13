@@ -1,6 +1,6 @@
 {
   "packageId": "host.emergent.smartworklog.twa",
-  "host": "task-intelligence-13.preview.emergentagent.com",
+  "host": "task-intelligence-13.emergent.host",
   "name": "Smart WorkLog AI",
   "launcherName": "WorkLog",
   "display": "standalone",
@@ -12,9 +12,9 @@
   "backgroundColor": "#09090b",
   "enableNotifications": true,
   "startUrl": "/",
-  "iconUrl": "https://task-intelligence-13.preview.emergentagent.com/logo512.png",
-  "maskableIconUrl": "https://task-intelligence-13.preview.emergentagent.com/logo512.png",
-  "monochromeIconUrl": "https://task-intelligence-13.preview.emergentagent.com/logo512.png",
+  "iconUrl": "https://task-intelligence-13.emergent.host/logo512.png",
+  "maskableIconUrl": "https://task-intelligence-13.emergent.host/logo512.png",
+  "monochromeIconUrl": "https://task-intelligence-13.emergent.host/logo512.png",
   "appVersion": "1.0.0",
   "appVersionCode": 1,
   "shortcuts": [
@@ -22,13 +22,13 @@
       "name": "Daily Update",
       "shortName": "Update",
       "url": "/daily-update",
-      "chosenIconUrl": "https://task-intelligence-13.preview.emergentagent.com/logo192.png"
+      "chosenIconUrl": "https://task-intelligence-13.emergent.host/logo192.png"
     },
     {
       "name": "My Tasks",
       "shortName": "Tasks",
       "url": "/tasks",
-      "chosenIconUrl": "https://task-intelligence-13.preview.emergentagent.com/logo192.png"
+      "chosenIconUrl": "https://task-intelligence-13.emergent.host/logo192.png"
     }
   ],
   "signingKey": {
@@ -39,7 +39,7 @@
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "https://task-intelligence-13.preview.emergentagent.com/",
+  "fullScopeUrl": "https://task-intelligence-13.emergent.host/",
   "minSdkVersion": 21,
   "orientation": "default",
   "fingerprints": [],

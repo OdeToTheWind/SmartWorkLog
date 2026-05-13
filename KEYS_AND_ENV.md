@@ -47,14 +47,11 @@ PUBLIC_BASE_URL="https://task-intelligence-13.preview.emergentagent.com"
 # This is the Universal/Emergent LLM key — covers file uploads + S3 storage
 EMERGENT_LLM_KEY="<provided-by-emergent-platform-or-set-after-migration>"
 
-# ─── JIRA INTEGRATION (optional, P1 feature) ────────────────────────────
-# Set up at: https://developer.atlassian.com/console/myapps
-# Create OAuth 2.0 (3LO) app → scopes: read:jira-work, read:jira-user, offline_access
-# Callback URL must EXACTLY match JIRA_REDIRECT_URI below.
-JIRA_CLIENT_ID=""
-JIRA_CLIENT_SECRET=""
-JIRA_REDIRECT_URI="https://task-intelligence-13.preview.emergentagent.com/integrations/jira/callback"
-JIRA_OAUTH_STATE_SECRET="worklog-jira-state-CHANGE-ME"
+# ─── JIRA INTEGRATION ───────────────────────────────────────────────────
+# REMOVED Feb 2026 per user request. Leave these blank or omit entirely.
+# JIRA_CLIENT_ID=""
+# JIRA_CLIENT_SECRET=""
+# JIRA_REDIRECT_URI=""
 ```
 
 ---
