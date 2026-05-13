@@ -1,588 +1,431 @@
 # Smart WorkLog AI
 
-> AI-powered workforce daily-update and task management SaaS with multi-tenant architecture, role-based access control, priority escalation, Telegram bot integration, and real-time dashboards.
+> **AI-powered workforce daily-update and task management system, available as a Website AND an Android APK.**
 
-**Live demo (production)**: https://task-intelligence-13.emergent.host
-**Preview (dev)**: https://task-intelligence-13.preview.emergentagent.com
-**Telegram bot**: `@smartworklogbot`
+[![status](https://img.shields.io/badge/status-production-success)]() [![stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20React%20%2B%20MongoDB-2563eb)]() [![ai](https://img.shields.io/badge/AI-Gemini%202.5%20Flash-7c3aed)]() [![pwa](https://img.shields.io/badge/PWA-Android%20Ready-10b981)]()
 
 ---
 
 ## Table of Contents
 
-1. [What it does](#what-it-does)
-2. [Architecture](#architecture)
-3. [Tech stack](#tech-stack)
-4. [Roles & permissions](#roles--permissions)
-5. [Core features](#core-features)
-6. [Telegram bot commands](#telegram-bot-commands)
+1. [What it is](#what-it-is)
+2. [Two ways to use it](#two-ways-to-use-it)
+3. [Feature list](#feature-list)
+4. [Architecture](#architecture)
+5. [Tech stack](#tech-stack)
+6. [Six roles & RBAC](#six-roles--rbac)
 7. [API reference](#api-reference)
-8. [Database schema](#database-schema)
-9. [Local development setup](#local-development-setup)
-10. [Environment variables](#environment-variables)
-11. [Make.com automation](#makecom-automation)
-12. [PWA / Android install](#pwa--android-install)
-13. [Test credentials](#test-credentials)
-14. [Project structure](#project-structure)
-15. [Deferred / Phase 3 backlog](#deferred--phase-3-backlog)
+8. [AI behaviour](#ai-behaviour)
+9. [Light / Dark mode](#light--dark-mode)
+10. [Telegram bot](#telegram-bot)
+11. [Make.com automations](#makecom-automations)
+12. [Jira integration](#jira-integration)
+13. [PWA + Android APK distribution](#pwa--android-apk-distribution)
+14. [Local development](#local-development)
+15. [Environment & keys](#environment--keys)
+16. [Migrating off Emergent](#migrating-off-emergent)
+17. [Related docs](#related-docs)
 
 ---
 
-## What it does
+## What it is
 
-Smart WorkLog AI lets distributed teams submit a free-text daily update — which Gemini AI parses into structured fields (mood, urgency, summary) — and gives HR/Supervisors real-time dashboards plus a fully-fledged **Priority Escalation** system (the core differentiator):
+Smart WorkLog AI is a **multi-tenant SaaS** that lets distributed teams submit free-text daily updates which **Gemini 2.5 Flash** parses into structured data (mood, summary, blockers, urgency). Managers see real-time dashboards; HR gets weekly PDFs; supervisors get escalation alerts on critical-priority tasks. The same workflows are accessible via:
 
-- Any authorised role can escalate a task's priority (Low → Medium → High → Critical)
-- Mandatory ≥10-character reason
-- Optional "requires sacrifice" toggle — caller picks other tasks to deprioritise atomically
-- Critical tasks fire immediate alerts to assignee + supervisor + HR
-- Acknowledgement banner pulses red until the assignee taps "Acknowledged"
-- Conflict alerts when one employee has ≥2 Critical tasks at once
-- Full audit log of who escalated what, when, and why
+- **Web app** at `https://task-intelligence-13.emergent.host` (responsive, PWA, light/dark mode)
+- **Android app** — signed APK distributed directly to your team (no Play Store needed)
+- **Telegram bot** — two-way, lets users post updates, create tasks, request leave, query team status from chat
 
-Layered on top:
-- Multi-tenant data isolation (every record scoped to `company_id`)
-- 6-role RBAC (Super Admin > HR > Supervisor > Developer > Team Member > Employee)
-- Two-way Telegram bot — submit daily update, create tasks, request leave, query team status — replies translated to user's preferred language
-- Make.com automation — 18:00 IST daily digest + Friday weekly PDF report
-- Leave management, in-app notifications, gamification (streaks + badges + weekly leaderboard)
-- 7-language i18n with RTL for Arabic/Urdu
-- **Light / Dark mode** with system-preference detection + manual override (zinc-950 / zinc-50 / zinc-800 palette in dark; AI buttons use indigo→purple→pink gradient)
-- **Change password** & **Change email** self-service for any role (sidebar footer icons)
-- **Bulk CSV import** of people (HR / Super Admin, up to 500 rows, auto-creates missing teams + temp passwords)
-- **Jira OAuth one-way sync** — developers connect their Jira workspace, assigned issues mirror as technical tasks (priority/status mapped)
-- PWA: installable on Android (auto-prompt + standalone display), offline-capable. Generate a real APK via PWABuilder or Bubblewrap (see DEPLOYMENT.md)
+It runs entirely on the Emergent stack but is **portable** — see [`MIGRATION.md`](./MIGRATION.md).
+
+---
+
+## Two ways to use it
+
+### 1) The Website (Primary)
+
+Open the URL in any modern browser:
+- Live: https://task-intelligence-13.emergent.host
+- Preview / dev: https://task-intelligence-13.preview.emergentagent.com
+
+Default seeded credentials (change on first login):
+- **Super Admin** — `admin@acme.com` / `pass1234`
+- **HR Manager** — `bhargavi.badal@gmail.com` / `hakuna2026`
+
+### 2) The Android App (Internal Distribution)
+
+Smart WorkLog is also packaged as a **signed Android APK** (`/app/android/app-release-signed.apk`). You distribute it **directly to your team** (not via Google Play) using:
+
+- Direct download link (Google Drive, Dropbox, your file server)
+- WhatsApp / Slack / email attachment
+- QR code
+
+Team members install by tapping the APK, allowing "Install from this source" once, and the app icon appears on their home screen with the same look + feel as a Play Store app. Updates are pushed by sending a new APK with a higher `appVersionCode`. The build kit (`/app/android/`) and one-command build script (`./build.sh`) are in this repo. **For pure web/UI changes you don't need to rebuild** — the APK is a TWA wrapper that loads the live URL.
+
+Full APK build + distribution guide: [`PLAYSTORE_UPLOAD.md`](./PLAYSTORE_UPLOAD.md) (the Play-Store section is optional — feel free to ignore it and stay on direct distribution).
+
+---
+
+## Feature list
+
+### Core
+- **6-role RBAC**: Super Admin > HR Manager > Supervisor > Developer > Team Member > Employee
+- **Multi-tenant data isolation** — every record scoped to `company_id` (queryable only by the same tenant)
+- **JWT-based auth** — 30-day token, bcrypt password hashing
+- **5 role-specific dashboards** — each shows what *that* role actually cares about
+
+### Daily updates & AI
+- Free-text submission (web or Telegram)
+- Gemini 2.5 Flash extracts: mood (1-5), one-line AI summary, blocker detection, language detection
+- Mood heatmap (Recharts) per team
+- 14-day streak counter + badges (gamification)
+
+### Tasks
+- Personal / Team / Recurring task types
+- Priority escalation flow — must give a reason + "sacrifice" when bumping a task to *critical*
+- Three views: **Table**, **Kanban**, **Grid**
+- Attachments via Emergent object storage (10 MB each)
+- One-way Jira sync (read-only mirror of your assigned Jira issues)
+
+### People & Teams
+- **Self-service password change** (lock icon in sidebar) — required current password, strength meter
+- **Self-service email change** (envelope icon in sidebar) — re-issues JWT in-place
+- **Bulk CSV import** of up to 500 people (HR/Super Admin only) — auto-creates missing teams, resolves supervisors by email, generates temp passwords
+- **GDPR right-to-delete** — HR can purge any user with audit trail
+
+### Communications
+- **Two-way Telegram bot** — `/start` auto-links account, then post daily updates, create tasks with `/newtask`, request leave, ask AI questions in 7 languages
+- **In-app notifications** with do-not-disturb / quiet hours
+- **Make.com automations** — Daily Digest at 18:00 IST + Friday Weekly PDF report
+
+### Polish
+- **Light / Dark mode** with system-preference detection (zinc-950 / zinc-50 / zinc-800 dark palette)
+- **AI-distinct CTAs** — Gemini-powered buttons use a signature indigo→purple→pink gradient
+- **7-language i18n** with RTL for Arabic/Urdu
+- **PWA** — installable on Android, offline-capable, dark-mode aware status bar
+- **Audit log** — every state change recorded with `who/what/when/why`
+- **Weekly leaderboard** — streaks, points, badges
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                          REACT FRONTEND (PWA)                        │
-│  - 5 role-aware dashboards (Employee / Team Member / Developer /    │
-│    Supervisor / HR)                                                  │
-│  - Service worker + manifest (offline + installable)                │
-│  - Recharts mood trends, calendar heatmap                            │
-│  - i18n (7 languages, AR/UR RTL)                                     │
-└──────────────────────────┬───────────────────────────────────────────┘
-                           │ JWT (role, company_id, team_id embedded)
-                           ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                      FASTAPI BACKEND (port 8001)                     │
-│  - All routes under /api/*                                           │
-│  - Bcrypt + JWT auth, role guards                                    │
-│  - Multi-tenant enforcement (company_id from JWT claim)              │
-│  - APScheduler (daily digest 18:00 UTC, Friday weekly PDF)           │
-│  - Gemini 2.5 Flash (direct google-generativeai SDK)                │
-│  - Emergent object storage (attachments + reports)                  │
-│  - Telegram Bot API (live, auto-webhook registration on startup)    │
-│  - Make.com webhook push                                             │
-│  - reportlab for PDF generation                                      │
-└────┬─────────────────────┬───────────────────────┬───────────────────┘
-     │                     │                       │
-     ▼                     ▼                       ▼
-┌──────────┐    ┌────────────────────┐    ┌───────────────────┐
-│ MongoDB  │    │  Telegram Bot API  │    │  Make.com Cloud   │
-│ (motor)  │    │  smartworklogbot   │    │  (2 scenarios:    │
-│          │    │                    │    │   digest + PDF)   │
-└──────────┘    └────────────────────┘    └───────────────────┘
+                    ┌──────────────────────────────────────────────────────┐
+                    │           Smart WorkLog AI — Single-tenant deploy    │
+                    └──────────────────────────────────────────────────────┘
+
+   ┌──────────────┐                                              ┌────────────────────┐
+   │ Web (React)  │  ◄─────────  HTTPS  ───────────────────►     │   FastAPI Backend  │
+   │ + PWA + APK  │              JWT                              │   (Python 3.11)    │
+   └──────────────┘                                              └────────┬───────────┘
+                                                                          │
+                       ┌──────────────────────────────────────┬───────────┼───────────┬─────────────────┐
+                       ▼                                      ▼           ▼           ▼                 ▼
+                ┌───────────┐                          ┌─────────────┐  ┌───────┐ ┌──────────┐   ┌─────────────┐
+                │ MongoDB    │                          │ Gemini 2.5  │  │ Telegram │ │ Make.com │   │ Emergent S3 │
+                │ (multi-    │                          │ Flash       │  │ Bot API │ │ Webhooks │   │ (object     │
+                │  tenant)   │                          │ (Google)    │  │         │ │          │   │  storage)   │
+                └───────────┘                          └─────────────┘  └───────┘ └──────────┘   └─────────────┘
 ```
+
+- **Multi-tenancy**: every collection has a `company_id` field; all queries automatically filter by the JWT's company_id claim
+- **AI**: direct `google-genai` SDK call to Google's Gemini 2.5 Flash with the user's `GEMINI_API_KEY` (NOT the Emergent LLM key — explicit user requirement)
+- **Object storage**: attachments hit Emergent's S3-compatible API via `EMERGENT_LLM_KEY` (when running on Emergent). On a migrated deployment, swap to plain `boto3` + AWS S3 / Backblaze B2 (see `MIGRATION.md`)
 
 ---
 
 ## Tech stack
 
-| Layer        | Tech                                          |
-| ------------ | --------------------------------------------- |
-| Frontend     | React 19, React Router, Tailwind CSS, shadcn/ui, Recharts, @phosphor-icons/react, lucide-react, sonner toast, axios |
-| Backend      | FastAPI, motor (async MongoDB), pydantic, bcrypt, PyJWT, requests |
-| Database     | MongoDB (multi-tenant, scoped by `company_id`) |
-| AI           | **Gemini 2.5 Flash** via `google-genai` SDK (direct Google API) |
-| Scheduler    | APScheduler (in-process AsyncIOScheduler)     |
-| PDF          | reportlab                                     |
-| File storage | Emergent managed object storage               |
-| Messaging    | Telegram Bot API (auto-webhook on startup)    |
-| Automation   | Make.com (free plan, 2 scenarios)             |
-| PWA          | Custom service worker + manifest.json         |
-| Build        | craco (CRA), yarn                             |
+| Layer        | Technology                                                   |
+| ------------ | ------------------------------------------------------------ |
+| Frontend     | React 18 + Tailwind CSS + shadcn/ui + Phosphor Icons + Recharts |
+| State / data | Axios + React Router + React Context                         |
+| Backend      | FastAPI 0.110 + Pydantic + Motor (async MongoDB driver)      |
+| Database     | MongoDB 7                                                    |
+| AI           | **Gemini 2.5 Flash** via `google-genai` SDK 2.0.1            |
+| Auth         | PyJWT + bcrypt                                               |
+| Scheduling   | APScheduler (in-process)                                     |
+| Telegram     | `python-telegram-bot` via plain HTTPS webhook                |
+| File storage | Emergent S3-compatible (via `EMERGENT_LLM_KEY`)              |
+| PDF          | ReportLab                                                    |
+| Android      | Bubblewrap (TWA wrapper around the PWA)                      |
+| Hosting      | Emergent platform (managed supervisord + nginx)              |
 
 ---
 
-## Roles & permissions
+## Six roles & RBAC
 
-Hierarchy (highest → lowest):
+| Role          | Sees on Dashboard                          | Can create tasks    | Can manage people    | Can purge users | Sees audit log |
+| ------------- | ------------------------------------------ | -------------------- | -------------------- | --------------- | -------------- |
+| Super Admin   | Cross-company overview, integrations       | Yes (any)            | Yes (incl. other admins) | Yes         | Yes (full)     |
+| HR Manager    | Company health, leaderboard, SLA widget    | Yes                  | Yes                  | Yes             | Yes            |
+| Supervisor    | Team kanban + team mood                    | Yes (team only)      | Edit team members    | No              | Team only      |
+| Developer     | Personal kanban + integrations             | Yes (own)            | No                   | No              | Own only       |
+| Team Member   | Personal task list                         | Yes (own)            | No                   | No              | Own only       |
+| Employee      | Personal task list                         | Yes (own)            | No                   | No              | Own only       |
 
-| Role         | Color  | Scope                                                                |
-| ------------ | ------ | -------------------------------------------------------------------- |
-| Super Admin  | slate  | Full system. Creates HR accounts.                                    |
-| HR Manager   | green  | Full company. Creates all other roles, sees all data, GDPR purge.    |
-| Supervisor   | indigo | Their team only. Manages tasks, approves leave, audit log for team.  |
-| Developer    | teal   | Technical tasks across their team. Kanban view.                      |
-| Team Member  | blue   | Own + shared tasks.                                                  |
-| Employee     | purple | Own tasks only. Submits daily update.                                |
-
-### Task action matrix
-
-| Action                              | Employee | Team Member | Developer | Supervisor | HR | Super Admin |
-| ----------------------------------- | :------: | :---------: | :-------: | :--------: | :-: | :---------: |
-| Create own task                     |    ✅    |     ✅      |    ✅     |     ✅     | ✅ |     ✅      |
-| Assign task to others               |    ❌    |     ❌      |   tech    |   team     | ✅ |     ✅      |
-| Create shared task                  |    ❌    |     ✅      |    ✅     |     ✅     | ✅ |     ✅      |
-| Edit status of own task             |    ✅    |     ✅      |    ✅     |     ✅     | ✅ |     ✅      |
-| Edit priority Low→Medium / Med→High |    ✅    |     ✅      |    ✅     |     ✅     | ✅ |     ✅      |
-| Set Critical                        |    ❌    |     ❌      |   tech    |     ✅     | ✅ |     ✅      |
-| Archive (soft delete)               |    ❌    |     ❌      |   tech    |     ✅     | ✅ |     ✅      |
-| Restore archived                    |    ❌    |     ❌      |    ❌     |     ✅     | ✅ |     ✅      |
-| GDPR purge user                     |    ❌    |     ❌      |    ❌     |     ❌     | ✅ |     ✅      |
-
----
-
-## Core features
-
-### Authentication
-- Bcrypt password hashing
-- JWT (HS256, 30-day expiry) with embedded claims: `user_id`, `company_id`, `role`, `team_id`, `supervisor_id`, `name`, `email`
-- Company self-registration creates the first super admin
-- HR creates all other roles
-
-### Priority Escalation (the differentiator)
-- POST `/api/tasks/{id}/priority` with body `{new_priority, reason, requires_sacrifice, sacrificed_task_ids[]}`
-- Reason must be ≥ 10 characters
-- Role-gated transitions (Employee Low→Med or Med→High only, etc.)
-- If `requires_sacrifice=true`, listed task IDs are auto-downgraded to `low`
-- Notifications fan to assignee + supervisor + HR (on Critical)
-- Conflict alert if assignee has ≥2 Critical tasks at once
-- Audit log captures `old`, `new`, `reason`, `performed_by`
-- Critical tasks show a **pulsing red banner** at the top of the dashboard until the assignee taps "Acknowledged"
-
-### Daily Updates
-- POST `/api/daily-updates` with `{raw_message, mood_score, blocker_text, completed_task_ids[], in_progress_task_ids[]}`
-- Backend calls **Gemini 2.5 Flash** to extract `mood_score`, `urgency`, `summary`, `ai_reply` (in user's language), `language`
-- Streak counter increments if there was an update yesterday
-- Badges auto-awarded: 7-day, 30-day, 90-day streaks
-- Blocker text → supervisor notification
-
-### Tasks
-- Full CRUD with role enforcement
-- Statuses: `todo`, `in_progress`, `done`, `blocked`
-- Priorities: `low`, `medium`, `high`, `critical`
-- Types: `general`, `technical`, `operational`, `hr`
-- Recurring tasks (daily/weekly/monthly) auto-spawn next instance on Done
-- Soft archive with mandatory reason (developer can only archive technical)
-- Attachments via Emergent object storage (max 5MB, jpg/png/pdf/gif/webp, max 3 per update)
-
-### Leave Management
-- Employee requests leave (start/end dates, type, reason)
-- Supervisor/HR approves or rejects → assignee notified
-- Approved leave suppresses the 4pm reminder
-
-### Notifications
-- In-app: `/api/notifications` list, mark read, mark all read
-- Telegram: any user with linked `telegram_chat_id` gets real-time pushes (priority changes, task assignments, blocker alerts, weekly digest, etc.)
-
-### Audit Log
-- Every task creation, status change, priority change, archive, restore, GDPR purge → `audit_log` collection
-- Scoped read: Employees see only their own task audits; Supervisors see their team; HR sees company-wide
-- Each entry: `action_type`, `performed_by_user_id`, `target_user_id`, `task_id`, `old_value`, `new_value`, `reason`, `timestamp`
-
-### Gamification
-- Streak counter on dashboard
-- Auto-badges for 7/30/90-day streaks
-- Weekly leaderboard (`/api/dashboard/leaderboard`) — top users by tasks completed in last 7 days
-
-### HR analytics
-- **Critical-task SLA widget** (`/api/dashboard/sla`): avg ack time (minutes), compliance %, total Critical tasks in last 30 days, currently unacknowledged
-- **Mood trend** (`/api/dashboard/mood-trend?days=30`): daily aggregate mood for Recharts line chart
-- **30-day heatmap** on the History page (grid of colored cells per day)
-- **AI Daily Digest** card (`/api/dashboard/digest`) — 3-sentence Gemini summary
-
-### Multi-language & RTL
-- 7 languages: English, Hindi, Arabic, Urdu, Bangla, French, Swahili
-- Language switcher on the History page
-- AR/UR automatically switch to RTL layout
-- Telegram replies + AI text auto-translate to user's preferred language
-
-### PWA & Android install
-- Installable on Android (Chrome menu → **Install app** or in-app **Install** banner that auto-appears) and iOS (Safari → Add to Home Screen)
-- Manifest includes shortcuts (Daily Update, My Tasks), maskable icons, and `display: standalone` so the app opens fullscreen with no browser chrome
-- Service worker caches static assets (cache-first) and `/api/*` (network-first with cache fallback)
-- Theme-aware status bar — dark `#09090b` in dark mode, light `#FAFAFA` in light mode
-- **APK build**: use [PWABuilder](https://www.pwabuilder.com/) (web GUI) or [Bubblewrap CLI](https://github.com/GoogleChromeLabs/bubblewrap) to wrap the PWA as a Trusted Web Activity for Google Play submission — see DEPLOYMENT.md
-
-### Light / Dark mode
-- Three-state toggle: **System / Light / Dark** — icon in the sidebar footer (sun, moon, or desktop)
-- Honors `prefers-color-scheme`; manual choice persisted in `localStorage.worklog_theme`
-- Dark palette: `bg-zinc-950` / `text-zinc-50` / `border-zinc-800` (shadcn-mapped CSS variables)
-- **AI-distinct CTAs** — every Gemini-powered button uses the `ai-gradient` class (indigo → purple → pink)
-
-### GDPR right-to-delete
-- HR/Super Admin only
-- Two-step confirmation modal — user must type exactly `DELETE PERMANENTLY`
-- Cascade-deletes: user record, tasks assigned, daily updates, notifications, leaves, audit log entries (for and by the user), attachments (soft-deleted)
-- Irreversible
-
----
-
-## Telegram bot commands
-
-Bot username: **`@smartworklogbot`**
-
-### All-role commands
-| Command                                       | What it does                                                       |
-| --------------------------------------------- | ------------------------------------------------------------------ |
-| `/start`                                      | Welcome + auto-link if username matches a known user               |
-| `/tasks` or `my tasks`                        | List open tasks sorted by priority                                 |
-| `/newtask <title>` or `new task: <title>`     | Create a task with AI-extracted priority/due-date/type             |
-| `/acknowledge`                                | Acknowledge the oldest unacknowledged Critical task                |
-| `/leave` or "I'm on leave tomorrow"           | Register a leave request for tomorrow                              |
-| (any free-text)                               | Treated as a daily update, parsed by Gemini, stored in DB          |
-
-### Supervisor / HR
-| Command            | Role(s)            | What it does                                          |
-| ------------------ | ------------------ | ----------------------------------------------------- |
-| `/teamstatus`      | Supervisor, HR, SA | Today's update count + avg mood + missing count       |
-| `/teammood`        | HR, SA             | 7-day team mood average + low-mood entry count        |
-| `/pendingleaves`   | HR, SA             | List of pending leave requests                        |
-| `/criticaltasks`   | Supervisor, HR, SA | All open Critical tasks across the team / company     |
-
-### Auto-link via `/start`
-When a user with a linked Telegram **username** (e.g. `@QuestSong` stored in their profile) opens the bot and taps Start:
-1. Backend looks up by `telegram_username`
-2. Captures the numeric `chat.id` from the Telegram payload
-3. Writes it to `telegram_chat_id` in the user record
-4. Sends a localised welcome message including the captured chat id
-From this point, all outbound messages from the backend (digests, alerts, priority changes) flow directly to that chat.
+All API endpoints enforce these rules server-side. Front-end nav items are filtered by role too.
 
 ---
 
 ## API reference
 
-All routes are prefixed with `/api`. Authentication via `Authorization: Bearer <jwt>`.
+A condensed view. Every endpoint is under `/api/` and (except auth) requires `Authorization: Bearer <jwt>`.
 
 ### Auth
-| Method | Path                                | Description                                        |
-| ------ | ----------------------------------- | -------------------------------------------------- |
-| POST   | `/api/auth/register-company`        | Create company + super admin                       |
-| POST   | `/api/auth/login`                   | Returns `{token, user}`                            |
-| GET    | `/api/auth/me`                      | Current user                                       |
-| POST   | `/api/auth/change-password`         | `{current_password, new_password}` — 8 char min    |
-| POST   | `/api/auth/change-email`            | `{current_password, new_email}` — re-issues JWT    |
+| Method | Path                          | Description                                            |
+| ------ | ----------------------------- | ------------------------------------------------------ |
+| POST   | `/auth/register-company`      | Create company + super admin in one step               |
+| POST   | `/auth/login`                 | Returns `{token, user}`                                |
+| GET    | `/auth/me`                    | Current user (without password hash)                   |
+| POST   | `/auth/change-password`       | `{current_password, new_password}` — 8 char min        |
+| POST   | `/auth/change-email`          | `{current_password, new_email}` — re-issues JWT        |
 
 ### Users & Teams
-| Method | Path                       | Roles                | Description                                    |
-| ------ | -------------------------- | -------------------- | ---------------------------------------------- |
-| POST   | `/api/users`               | super_admin, hr      | Create user (role/team/supervisor/lang/tg)     |
-| POST   | `/api/users/bulk-import`   | super_admin, hr      | CSV bulk import (up to 500 rows)               |
-| GET    | `/api/users`               | all                  | Scoped list (supervisor sees team only)        |
-| PATCH  | `/api/users/me`            | all                  | Update own timezone, language, telegram, prefs |
-| DELETE | `/api/users/{id}/purge`    | hr, super_admin      | GDPR purge (body: `{"confirmation_text": "DELETE PERMANENTLY"}`) |
-| POST   | `/api/teams`               | super_admin, hr      | Create team                                    |
-| GET    | `/api/teams`               | all                  | List teams                                     |
+| Method | Path                              | Roles            | Notes                                                  |
+| ------ | --------------------------------- | ---------------- | ------------------------------------------------------ |
+| POST   | `/users`                          | super_admin, hr  | Create user                                            |
+| POST   | `/users/bulk-import`              | super_admin, hr  | CSV bulk import (up to 500 rows)                       |
+| GET    | `/users`                          | all              | Scoped list (supervisor sees own team)                 |
+| PATCH  | `/users/me`                       | all              | Update own timezone, language, Telegram handle, prefs  |
+| DELETE | `/users/{id}/purge`               | hr, super_admin  | GDPR purge — needs `{"confirmation_text": "DELETE PERMANENTLY"}` |
+| POST   | `/teams`                          | super_admin, hr  | Create team                                            |
+| GET    | `/teams`                          | all              | List teams                                             |
 
 ### Tasks
-| Method | Path                                | Description                                         |
-| ------ | ----------------------------------- | --------------------------------------------------- |
-| POST   | `/api/tasks`                        | Create task (role-gated)                            |
-| GET    | `/api/tasks?status=&priority=&scope=` | Scoped list                                       |
-| GET    | `/api/tasks/{id}`                   | Get task                                            |
-| PATCH  | `/api/tasks/{id}`                   | Update title/description/status/due/blocker        |
-| POST   | `/api/tasks/{id}/priority`          | **Priority Escalation** (see body schema above)     |
-| POST   | `/api/tasks/{id}/acknowledge`       | Acknowledge a Critical task                         |
-| POST   | `/api/tasks/{id}/archive`           | Soft delete (body: `{"reason": "..."}`)             |
-| POST   | `/api/tasks/{id}/restore`           | Restore archived                                    |
-| GET    | `/api/tasks-archived`               | List archived (super_admin/hr/supervisor only)      |
+| Method | Path                              | Description                                                                 |
+| ------ | --------------------------------- | --------------------------------------------------------------------------- |
+| POST   | `/tasks`                          | Create personal / team / recurring task                                     |
+| GET    | `/tasks?status=&assignee=&team=`  | Filterable list                                                             |
+| PATCH  | `/tasks/{id}`                     | Update fields (priority bump requires `reason` + `sacrifice`)              |
+| DELETE | `/tasks/{id}`                     | Soft archive                                                                |
 
-### Daily Updates
-| Method | Path                  | Description                                      |
-| ------ | --------------------- | ------------------------------------------------ |
-| POST   | `/api/daily-updates`  | Submit + Gemini parse                            |
-| GET    | `/api/daily-updates`  | List (role-scoped)                               |
+### Daily updates
+| Method | Path                              | Description                                                                 |
+| ------ | --------------------------------- | --------------------------------------------------------------------------- |
+| POST   | `/daily-updates`                  | Submit raw text + mood → AI parses it inline, returns summary + streak     |
+| GET    | `/daily-updates?date=`            | History (filtered by date, user)                                            |
 
-### Leave
-| Method | Path                          | Description                  |
-| ------ | ----------------------------- | ---------------------------- |
-| POST   | `/api/leaves`                 | Request leave                |
-| GET    | `/api/leaves`                 | List (role-scoped)           |
-| POST   | `/api/leaves/{id}/approve`    | Approve/reject (sup/hr)      |
+### Leave & notifications
+| Method | Path                              | Description                                                                 |
+| ------ | --------------------------------- | --------------------------------------------------------------------------- |
+| POST   | `/leave-requests`                 | Submit leave request                                                        |
+| POST   | `/leave-requests/{id}/decision`   | HR / Supervisor approve or reject                                           |
+| GET    | `/notifications`                  | In-app inbox                                                                |
 
-### Notifications
-| Method | Path                                | Description           |
-| ------ | ----------------------------------- | --------------------- |
-| GET    | `/api/notifications`                | List own              |
-| POST   | `/api/notifications/{id}/read`      | Mark read             |
-| POST   | `/api/notifications/read-all`       | Mark all read         |
+### Admin & cron
+| Method | Path                              | Description                                                                 |
+| ------ | --------------------------------- | --------------------------------------------------------------------------- |
+| POST   | `/admin/run-digest-now`           | Manual daily digest fire (hr/super_admin)                                   |
+| POST   | `/admin/run-weekly-pdf-now`       | Manual Friday-PDF fire                                                      |
+| POST   | `/cron/generate-digest`           | Called by Make.com on schedule (uses `MAKE_WEBHOOK_SECRET`)                 |
+| POST   | `/cron/generate-weekly-pdf`       | Called by Make.com on schedule                                              |
+| POST   | `/telegram/webhook`               | Inbound Telegram bot updates                                                |
 
-### Files (Emergent object storage)
-| Method | Path                                | Description                                        |
-| ------ | ----------------------------------- | -------------------------------------------------- |
-| POST   | `/api/files/upload`                 | Multipart upload (5MB cap, jpg/png/pdf/gif/webp)   |
-| GET    | `/api/files/{file_id}?auth=<jwt>`   | Stream file (header or query token)                |
-| GET    | `/api/files`                        | List own/team files                                |
-| DELETE | `/api/files/{file_id}`              | Soft delete                                        |
+### Jira integration (P1)
+| Method | Path                              | Description                                                                 |
+| ------ | --------------------------------- | --------------------------------------------------------------------------- |
+| GET    | `/integrations/jira/status`       | Whether server is configured & current user is connected                    |
+| GET    | `/integrations/jira/auth-url`     | Atlassian authorize URL with CSRF state                                     |
+| POST   | `/integrations/jira/callback`     | `{code, state}` → exchanges auth code, stores tokens                        |
+| POST   | `/integrations/jira/sync`         | Pulls assigned Jira issues (up to 200) → mirrors as technical tasks         |
+| POST   | `/integrations/jira/disconnect`   | Deletes stored tokens                                                       |
 
-### Audit
-| Method | Path                | Description                                |
-| ------ | ------------------- | ------------------------------------------ |
-| GET    | `/api/audit-log`    | Filter by `action`, `user_id`, `limit`     |
-
-### Dashboards
-| Method | Path                                  | Description                                  |
-| ------ | ------------------------------------- | -------------------------------------------- |
-| GET    | `/api/dashboard/summary`              | Role-scoped counts                           |
-| GET    | `/api/dashboard/digest`               | AI digest paragraph                          |
-| GET    | `/api/dashboard/leaderboard`          | Top 10 by completed tasks (7-day)            |
-| GET    | `/api/dashboard/sla`                  | Critical-task SLA metrics                    |
-| GET    | `/api/dashboard/mood-trend?days=30`   | Daily aggregate mood                         |
-
-### Telegram
-| Method | Path                       | Description                                                |
-| ------ | -------------------------- | ---------------------------------------------------------- |
-| POST   | `/api/telegram/webhook`    | Inbound from Telegram (no auth — Telegram-signed)          |
-| POST   | `/api/telegram/link`       | Link username + chat_id to current user                    |
-
-### Make.com cron
-| Method | Path                                                  | Description                                                              |
-| ------ | ----------------------------------------------------- | ------------------------------------------------------------------------ |
-| POST   | `/api/cron/generate-digest?secret=...`                | Body `{"timezone": "Asia/Kolkata"}` → digest for HRs in that timezone    |
-| POST   | `/api/cron/generate-weekly-pdf?company_id=...&secret=...` | Generates PDF, uploads to storage, pushes file URL to Make.com         |
-
-### Admin helpers
-| Method | Path                                | Description                                       |
-| ------ | ----------------------------------- | ------------------------------------------------- |
-| POST   | `/api/admin/run-digest-now`         | Manual digest for own company (hr/super_admin)    |
-| POST   | `/api/admin/run-weekly-pdf-now`     | Manual weekly PDF                                 |
-
-### Integrations: Jira (OAuth 2.0 3LO, one-way read-only sync)
-| Method | Path                                | Description                                                              |
-| ------ | ----------------------------------- | ------------------------------------------------------------------------ |
-| GET    | `/api/integrations/jira/status`     | Whether server is configured and the current user is connected           |
-| GET    | `/api/integrations/jira/auth-url`   | Returns Atlassian OAuth authorize URL with a CSRF state                  |
-| POST   | `/api/integrations/jira/callback`   | `{code, state}` — exchanges auth code for tokens, stores them encrypted  |
-| POST   | `/api/integrations/jira/sync`       | Pulls up to 200 assigned Jira issues, mirrors them as technical tasks    |
-| POST   | `/api/integrations/jira/disconnect` | Deletes the stored Jira tokens for current user                          |
+Full API documentation with request/response examples lives in the codebase at `/app/backend/server.py` (search for `@api.`).
 
 ---
 
-## Database schema
+## AI behaviour
 
-All collections are scoped by `company_id`. Documents use UUID `id` field (not Mongo `_id`).
+**Model**: `gemini-2.5-flash` via `google-genai` SDK (direct Google API, not Emergent LLM key).
 
-| Collection         | Key fields                                                                                                          |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `companies`        | `id`, `name`, `working_days[]`, `retention_months`, `created_at`                                                    |
-| `users`            | `id`, `company_id`, `name`, `email`, `password_hash`, `role`, `team_id`, `supervisor_id`, `timezone`, `language`, `telegram_username`, `telegram_chat_id`, `streak_count`, `badges[]`, `active` |
-| `teams`            | `id`, `company_id`, `name`, `supervisor_id`, `member_ids[]`                                                         |
-| `tasks`            | `id`, `company_id`, `title`, `description`, `assigned_to_user_id`, `created_by_user_id`, `team_id`, `status`, `priority`, `type`, `due_date`, `is_recurring`, `recurrence_rule`, `is_shared`, `shared_with_user_ids[]`, `blocker_text`, `acknowledged_at`, `archived`, `archive_reason` |
-| `daily_updates`    | `id`, `company_id`, `user_id`, `date`, `raw_message`, `completed_task_ids[]`, `in_progress_task_ids[]`, `blocker_text`, `mood_score`, `urgency`, `ai_summary`, `ai_reply`, `language` |
-| `audit_log`        | `id`, `company_id`, `action_type`, `performed_by_user_id`, `target_user_id`, `task_id`, `old_value`, `new_value`, `reason`, `timestamp` |
-| `priority_changes` | `id`, `company_id`, `task_id`, `changed_by_user_id`, `old_priority`, `new_priority`, `reason`, `affected_users[]`, `sacrificed_task_ids[]`, `timestamp` |
-| `leaves`           | `id`, `company_id`, `user_id`, `start_date`, `end_date`, `leave_type`, `reason`, `status`, `approved_by`            |
-| `notifications`    | `id`, `company_id`, `user_id`, `type`, `message`, `read`, `related_task_id`, `created_at`                            |
-| `attachments`      | `id`, `company_id`, `user_id`, `storage_path`, `original_filename`, `content_type`, `size`, `task_id`, `daily_update_date`, `is_deleted`, `report` |
+What the AI does:
+1. **Parse daily updates** — extracts mood score, one-line summary, blocker mentions
+2. **Parse Telegram messages** — converts free text like "remind me to ship the auth fix by Friday, high priority" into a structured task
+3. **Translate replies** — bot replies in the user's preferred language (7 supported)
+4. **Auto-detect blockers** — flags blockers in updates for supervisor notification
+
+System prompts are deliberately strict and JSON-shaped where structured output is needed (mood parsing, task creation), and natural-language elsewhere (chat replies). All AI calls live in `_gemini_call()` in `server.py`.
+
+If `GEMINI_API_KEY` is empty or the call fails, the app gracefully degrades — daily updates save as raw text without an AI summary, and the bot replies with an echo. No feature *requires* AI to function.
 
 ---
 
-## Local development setup
+## Light / Dark mode
+
+Three-state toggle via the sidebar footer icon (sun/moon/desktop):
+
+- **System** (default) — honors `prefers-color-scheme`
+- **Light** — shadcn defaults
+- **Dark** — `bg-zinc-950` / `text-zinc-50` / `border-zinc-800`
+
+Preference persisted in `localStorage.worklog_theme`. Status-bar meta tags also flip for true edge-to-edge dark display on Android. AI-driven buttons (Daily Update parse, Jira sync, PWA install banner) always use the **indigo → purple → pink** signature gradient (via the `ai-gradient` utility class) regardless of theme — so AI actions are visually distinct from regular CTAs.
+
+---
+
+## Telegram bot
+
+After setting `TELEGRAM_BOT_TOKEN`, the backend auto-registers the webhook at startup. Users link their account by DM'ing `/start <email>` (or `/start` if their phone number is on file).
+
+Commands:
+| Command       | What it does                                                                                 |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| `/start`      | Link Telegram chat to user account                                                           |
+| `/today`      | Submit today's daily update (free text afterward → AI parses)                                |
+| `/newtask`    | Natural language → structured task ("ship auth fix by Friday high priority")                 |
+| `/leave`      | Request leave (`/leave 2026-03-04 to 2026-03-05 family wedding`)                             |
+| `/status`     | Get a 1-line summary of your team's day (supervisor only)                                    |
+| `/help`       | Command list                                                                                 |
+
+All replies are auto-translated to the user's preferred language.
+
+---
+
+## Make.com automations
+
+Two scenarios, both **scheduled in Make** (not in the backend), both authenticated via `MAKE_WEBHOOK_SECRET`:
+
+1. **Daily Digest** — Mon–Fri 18:00 IST → calls `/api/cron/generate-digest` for each company → backend produces a per-team summary → Make routes it to email / Slack / wherever
+2. **Friday Weekly PDF** — Friday 18:05 IST → calls `/api/cron/generate-weekly-pdf` → backend builds a ReportLab PDF with the week's stats → returns a public URL → Make emails it to HR
+
+The backend also has an in-process **APScheduler** fallback that runs the same cron jobs locally if `SCHEDULER_ENABLED=true` — useful when Make.com isn't configured.
+
+---
+
+## Jira integration
+
+OAuth 2.0 (3LO) flow, **read-only one-way sync**:
+
+1. Set `JIRA_CLIENT_ID`, `JIRA_CLIENT_SECRET`, `JIRA_REDIRECT_URI` in `backend/.env`
+2. User on `/integrations` → clicks **Connect Jira** → Atlassian consent → returns to app
+3. User clicks **Sync now** → up to 200 of their unfinished Jira issues mirror into the **Tasks** table with `external_source: "jira"`
+4. Priority mapping: Highest→Critical, High→High, Medium→Medium, Low/Lowest→Low
+5. Status mapping: New→todo, In Progress→in_progress, Done→done
+
+Jira remains the source of truth — local edits on synced tasks get overwritten on next sync. Tokens auto-refresh via stored `offline_access` refresh tokens.
+
+Setup guide in [`ENV_REFERENCE.md`](./ENV_REFERENCE.md#jira-integration--step-by-step-setup).
+
+---
+
+## PWA + Android APK distribution
+
+### Web → PWA installation (any role)
+
+On Chrome / Edge / Samsung Internet / Brave on Android:
+1. Open the URL → an in-app gradient banner appears at bottom-right ("Install Smart WorkLog")
+2. Tap **Install** → app icon appears on home screen
+3. Tap the icon → opens fullscreen, no browser chrome (`display: standalone`)
+
+On iOS Safari → Share → "Add to Home Screen" (no auto-prompt — iOS limitation).
+
+### Android APK (current distribution model)
+
+Smart WorkLog is also wrapped as a signed Android APK using **Bubblewrap** (Google's official TWA tool). You distribute the APK directly to your team — **no Google Play account needed**.
+
+The build kit is in `/app/android/`:
+```
+twa-manifest.json   # Bubblewrap config — pre-filled for Smart WorkLog
+build.sh            # One-command AAB + APK build script
+```
+
+**Build on your laptop** (requires JDK 17 + Node 18+):
+```bash
+cd /app/android
+./build.sh
+# Output:
+#   app-release-signed.apk     ← send this to your team
+#   android.keystore           ← KEEP THIS FOREVER (re-used for every update)
+```
+
+**Distribute** by:
+- Hosting the APK on Google Drive / Dropbox / your file server → share the link
+- WhatsApp / Slack the file directly
+- QR code that links to the APK
+- An optional `assetlinks.json` is already in `/app/frontend/public/.well-known/` — paste your SHA-256 fingerprint there if you want the address-bar hidden in fullscreen mode
+
+**Update** by bumping `appVersionCode` in `twa-manifest.json`, re-running `./build.sh`, and re-sending the new APK. Users install over the old one (same keystore = no uninstall needed). **Web-only changes don't need a new APK** — the TWA loads the live URL.
+
+Detailed guide: [`PLAYSTORE_UPLOAD.md`](./PLAYSTORE_UPLOAD.md) (the Play Store-specific sections are optional).
+
+---
+
+## Local development
 
 ### Prerequisites
-- Python 3.11+
-- Node 18+ (yarn)
-- MongoDB (local or remote)
+- Python 3.11
+- Node 20 + Yarn
+- MongoDB 7 (local or Atlas)
 
 ### Backend
 ```bash
-cd backend
+cd /app/backend
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp ../ENV_REFERENCE.md ../.env  # copy & fill values
+cp ../KEYS_AND_ENV.md .env   # then edit to keep only the .env block
 uvicorn server:app --reload --host 0.0.0.0 --port 8001
 ```
 
 ### Frontend
 ```bash
-cd frontend
+cd /app/frontend
 yarn install
-cp .env.example .env
-echo "REACT_APP_BACKEND_URL=http://localhost:8001" >> .env
+# Edit .env → REACT_APP_BACKEND_URL=http://localhost:8001
 yarn start
 ```
 
-Open http://localhost:3000
+On Emergent the supervisor restarts both automatically on file change. On your own machine, hot-reload is enabled for both.
 
 ---
 
-## Environment variables
+## Environment & keys
 
-See **[ENV_REFERENCE.md](./ENV_REFERENCE.md)** for the full list with current values.
+**All secrets in one file**: [`KEYS_AND_ENV.md`](./KEYS_AND_ENV.md)
+**Reference + key rotation guide**: [`ENV_REFERENCE.md`](./ENV_REFERENCE.md)
 
-### Backend (`/app/backend/.env`)
-| Key                          | Required | Description                                                  |
-| ---------------------------- | :------: | ------------------------------------------------------------ |
-| `MONGO_URL`                  |    ✅    | MongoDB connection string                                    |
-| `DB_NAME`                    |    ✅    | Database name                                                |
-| `CORS_ORIGINS`               |    ✅    | Comma-separated origins or `*`                               |
-| `JWT_SECRET`                 |    ✅    | JWT signing secret                                           |
-| `GEMINI_API_KEY`             |    ✅    | Google AI Studio API key (direct, not via Emergent)          |
-| `EMERGENT_LLM_KEY`           |    ✅    | Object storage init                                          |
-| `TELEGRAM_BOT_TOKEN`         |    🟡    | BotFather token (bot stays mocked if empty)                  |
-| `MAKE_WEBHOOK_SECRET`        |    ✅    | Shared secret for `/api/cron/*` endpoints                    |
-| `MAKE_DIGEST_WEBHOOK_URL`    |    🟡    | Where to POST the daily digest payload                       |
-| `MAKE_WEEKLY_PDF_WEBHOOK_URL`|    🟡    | Where to POST the weekly PDF payload                         |
-| `SCHEDULER_ENABLED`          |    🟡    | `true` to enable APScheduler in-process                      |
-| `DIGEST_HOUR_UTC`            |    🟡    | Hour (0–23) for daily digest                                 |
-| `PUBLIC_BASE_URL`            |    ✅ (prod) | Used for Telegram setWebhook + PDF download URLs        |
+Quick env recap:
 
-### Frontend (`/app/frontend/.env`)
-| Key                       | Description                              |
-| ------------------------- | ---------------------------------------- |
-| `REACT_APP_BACKEND_URL`   | Public URL of FastAPI backend            |
+| File                         | Required keys                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `/app/backend/.env`          | `MONGO_URL`, `DB_NAME`, `JWT_SECRET`, `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `MAKE_WEBHOOK_SECRET`, `PUBLIC_BASE_URL`, …      |
+| `/app/frontend/.env`         | `REACT_APP_BACKEND_URL`                                                                                                        |
+| `/app/android/twa-manifest.json` | `host`, `fullScopeUrl`, `iconUrl` — for the APK build                                                                       |
 
 ---
 
-## Make.com automation
+## Migrating off Emergent
 
-Two scenarios (both included on the free plan).
+Smart WorkLog has **no Emergent-specific runtime dependencies** — only the optional `EMERGENT_LLM_KEY` for attachment storage uses an Emergent API. Everything else is plain FastAPI + React + MongoDB and runs anywhere.
 
-### Scenario 1 — Daily Digest
-- Trigger: Schedule (e.g. **12:30 UTC = 18:00 IST**)
-- Action: HTTP POST to `https://task-intelligence-13.emergent.host/api/cron/generate-digest?secret=<MAKE_WEBHOOK_SECRET>` with JSON body `{"timezone": "Asia/Kolkata"}`
-- Backend filters all HRs/Super Admins in that timezone, generates per-company digest via Gemini, sends Telegram, pushes payload back to `MAKE_DIGEST_WEBHOOK_URL` so Make.com can fan out further (email, Slack, etc.)
+Full step-by-step migration playbook: [`MIGRATION.md`](./MIGRATION.md)
 
-### Scenario 2 — Weekly PDF
-- Trigger: Schedule **Friday 12:30 UTC**
-- Action: HTTP POST to `https://task-intelligence-13.emergent.host/api/cron/generate-weekly-pdf?secret=<MAKE_WEBHOOK_SECRET>` with optional `?company_id=...`
-- Backend builds the PDF (reportlab), uploads to Emergent object storage, pushes `{file_url, stats, hr_recipients}` to `MAKE_WEEKLY_PDF_WEBHOOK_URL`
+TL;DR migration:
+1. Provision a VPS (Ubuntu 22.04, ≥2 vCPU / 4 GB / 40 GB)
+2. Install Node 20 + Python 3.11 + MongoDB 7 + nginx + certbot
+3. `mongodump` from Emergent → `mongorestore` on the new VM
+4. Clone the repo, paste env, `yarn build`, supervisor + nginx config
+5. `certbot --nginx -d worklog.yourcompany.com` for free HTTPS
+6. Re-point Telegram webhook + Make.com scenarios + Jira callback URL
+7. Rebuild the Android APK with the new domain, re-distribute to team
 
-### Adding more timezones
-Just duplicate Scenario 1 in Make.com and change the schedule + body, e.g.:
-- `13:00 UTC` → `{"timezone": "Europe/London"}` (BST teams)
-- `23:00 UTC` → `{"timezone": "America/New_York"}` (EDT teams)
-
-No backend code changes needed.
+ETA: **~1–2 hours**, including DNS propagation.
 
 ---
 
-## PWA / Android install
+## Related docs
 
-### From Chrome on Android
-1. Visit the live URL
-2. **Auto-prompt**: a gradient "Install Smart WorkLog" banner appears at the bottom — tap **Install**
-3. Or tap ⋮ menu → **Install app** (Add to Home Screen)
-4. Smart WorkLog icon appears on home screen
-5. Tap → opens full-screen (no browser chrome). The `manifest.json` declares `display: standalone`, so it looks native.
-6. Offline pages cached automatically; daily updates queue and sync when back online
-
-### From iOS Safari
-Share → "Add to Home Screen" (PWA install API is not available on iOS, no auto-prompt)
-
-### Generate a real APK / Play Store build
-The complete build kit is already in this repo:
-
-```
-/app/android/twa-manifest.json    # Bubblewrap config pre-filled for Smart WorkLog
-/app/android/build.sh             # One-command AAB build script
-/app/frontend/public/.well-known/assetlinks.json    # Domain↔APK verification template
-/app/PLAYSTORE_UPLOAD.md          # Complete step-by-step submission walkthrough
-```
-
-Run on your laptop:
-```bash
-cd /app/android
-./build.sh        # Produces app-release-bundle.aab + app-release-signed.apk
-```
-
-Then follow `/app/PLAYSTORE_UPLOAD.md` for the Play Console upload + tester invite flow (~30–45 min first time, ~5 min for updates).
-
-### What's cached
-- All static assets (cache-first via service worker)
-- `/api/*` responses (network-first with cache fallback for offline reads)
-- Manifest now includes app shortcuts (Daily Update, My Tasks) — long-press the home-screen icon to access them
-
----
-
-## Test credentials
-
-### HR (real account, used for the demo)
-- **Email**: `bhargavi.badal@gmail.com`
-- **Password**: `hakuna2026`
-- **Role**: HR · **Company**: Hakuna Matata · **Timezone**: Asia/Kolkata
-- **Telegram**: `@QuestSong` (chat_id captured automatically on /start)
-
-### Super Admin (test/demo company)
-- **Email**: `admin@acme.com`
-- **Password**: `pass1234`
-- Company: Acme (seeded with priority-escalation test data)
-
-> ⚠ These credentials are in the preview environment only and will not be pushed to the GitHub repo (`test_credentials.md` and `.env` are auto-excluded by Emergent's GitHub integration).
-
----
-
-## Project structure
-
-```
-/app
-├── backend/
-│   ├── server.py              # All FastAPI routes + AI + scheduler + Telegram
-│   ├── requirements.txt       # Pinned Python deps
-│   └── .env                   # Secrets (NOT in git)
-├── frontend/
-│   ├── public/
-│   │   ├── manifest.json      # PWA manifest
-│   │   └── sw.js              # Service worker (offline + cache)
-│   ├── src/
-│   │   ├── App.js             # React Router + AuthProvider + I18nProvider
-│   │   ├── App.css, index.css # Tailwind + custom theme variables
-│   │   ├── lib/
-│   │   │   ├── api.js         # axios instance + JWT interceptor
-│   │   │   ├── auth.jsx       # AuthContext + role colors
-│   │   │   └── i18n.jsx       # 7-language string table + RTL switcher
-│   │   ├── components/
-│   │   │   ├── Layout.jsx     # Sidebar nav (role-aware)
-│   │   │   ├── TaskCard.jsx
-│   │   │   ├── PriorityModal.jsx        # Escalation modal (reason + sacrifice)
-│   │   │   ├── CriticalBanner.jsx       # Top pulsing red banner
-│   │   │   ├── SLAWidget.jsx            # HR critical-task SLA card
-│   │   │   ├── AttachmentUploader.jsx
-│   │   │   ├── GdprPurgeDialog.jsx
-│   │   │   └── ui/            # shadcn primitives
-│   │   └── pages/
-│   │       ├── Login.jsx, Dashboard.jsx, Tasks.jsx, People.jsx
-│   │       ├── Notifications.jsx, Leave.jsx, AuditLog.jsx, Leaderboard.jsx
-│   │       ├── DailyUpdate.jsx, History.jsx
-│   ├── package.json, tailwind.config.js, craco.config.js
-│   └── .env                   # REACT_APP_BACKEND_URL (NOT in git)
-├── memory/
-│   ├── PRD.md                 # Original spec + shipped / deferred features
-│   └── test_credentials.md    # Excluded from git
-├── README.md                  # ← this file
-└── ENV_REFERENCE.md           # Full env-var template
-```
-
----
-
-## Deferred / Phase 3 backlog
-
-- Standalone React Native Android APK (current PWA covers Android already)
-- FCM push notifications for the native app
-- Jira / Trello / Asana OAuth one-way sync for developers
-- Photo capture from Telegram message → upload to Emergent storage
-- Photo capture inline in the Daily Update form (camera button)
-- Per-user quiet hours enforcement on push
-- Per-timezone cron for the 4pm "no update yet" reminder
-- HR / Super Admin custom email notifications via Resend or SendGrid
-- Custom domain (e.g. `worklog.yourcompany.com`) — easy bundled upsell
+| Doc                                            | Purpose                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------ |
+| [`KEYS_AND_ENV.md`](./KEYS_AND_ENV.md)         | Every secret + where to obtain it, in one private file (do not commit)   |
+| [`ENV_REFERENCE.md`](./ENV_REFERENCE.md)       | Per-variable reference + key rotation guide                              |
+| [`DEPLOYMENT.md`](./DEPLOYMENT.md)             | Emergent-specific deployment notes + preview/production split            |
+| [`MIGRATION.md`](./MIGRATION.md)               | Step-by-step Emergent → self-hosted server playbook                      |
+| [`PLAYSTORE_UPLOAD.md`](./PLAYSTORE_UPLOAD.md) | Android APK build kit + optional Play Store internal-testing walkthrough |
+| [`memory/PRD.md`](./memory/PRD.md)             | Original product spec + phase backlog                                    |
 
 ---
 
 ## License
 
-Proprietary — Smart WorkLog AI, built by Hakuna Matata. All rights reserved.
-
-## Acknowledgements
-
-- Built on **[Emergent](https://emergent.sh)** platform
-- AI by **Google Gemini 2.5 Flash**
-- Messaging by **Telegram Bot API**
-- Automation by **Make.com**
-- UI primitives by **shadcn/ui**
-- Icons by **Phosphor** + **Lucide**
+Proprietary — Smart WorkLog AI, built by Hakuna Matata.

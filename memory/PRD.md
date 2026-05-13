@@ -19,9 +19,15 @@ Build a full-stack workforce daily-update and task management system with AI int
 6. Employee — own tasks + daily update
 
 ## Implemented (Feb 2026)
+- **Service worker fix for stale bundles (Feb 2026, P0 prod issue)**: Fixed MIME-type errors on production where users saw white screens with CSS/JS served as `text/html`. Root cause: `sw.js` v1 was cache-first for `/index.html` → after a redeploy with new bundle hashes, SW served stale HTML referencing files that no longer exist. Fixed in `sw.js` v3: network-first for HTML navigations, never cache `/static/*` (webpack already cache-busts), bumped cache name to evict v1 caches on next activate. Users stuck on v1 need a single hard-refresh; self-healing thereafter.
+- **Documentation pack (Feb 2026)**: New consolidated `KEYS_AND_ENV.md` (every secret + acquisition guide in one private file), new `MIGRATION.md` (Emergent → self-hosted server playbook), full README rewrite (~588 lines, covers website + APK + Jira + dark mode), `PLAYSTORE_UPLOAD.md` reorganised with **direct APK distribution** as the primary path.
+- **Light / Dark mode**: Three-state toggle (System / Light / Dark) via `ThemeProvider`. Dark palette: `bg-zinc-950` / `text-zinc-50` / `border-zinc-800`. AI buttons use `.ai-gradient` (indigo → purple → pink).
+- **Jira OAuth one-way sync (P1)**: Atlassian 3LO OAuth, mirrors up to 200 unfinished assigned issues as technical tasks with priority/status mapping.
+- **Android-ready PWA + APK build kit**: `manifest.json` with display:standalone, app shortcuts, maskable icons. `/app/android/` build kit (`twa-manifest.json` + `build.sh`) for one-command APK/AAB generation. `assetlinks.json` template at `/app/frontend/public/.well-known/`.
+- **AI SDK migration (P3)**: `google-generativeai` → `google-genai` 2.0.1. Direct user API key preserved.
 - **Change Password (Feb 2026)**: `POST /api/auth/change-password` (current_password + new_password, 8-char min, must differ). UI: lock icon in sidebar footer opens `ChangePasswordDialog` with show/hide toggles, strength meter and confirm field. Available to all roles. Logged to audit (`password_changed`).
 - **Change Email (Feb 2026)**: `POST /api/auth/change-email` (current_password + new_email). Validates password, prevents duplicates and same-as-current. Re-issues JWT and updates session in-place so the user is not logged out. UI: envelope icon in sidebar footer opens `ChangeEmailDialog`. Logged to audit (`email_changed`).
-- **Bulk CSV import for People (Feb 2026)**: `POST /api/users/bulk-import` (HR / Super Admin, max 500 rows). Accepts rows with name, email + optional password/role/team_name/supervisor_email/timezone/language/telegram_id. Auto-creates missing teams (toggleable), resolves supervisor by email, auto-generates temporary password when omitted, returns per-row created/skipped/errors summary. UI: "Bulk import" button on People page opens `BulkImportDialog` with template download, client-side CSV parser, preview, results panel and CSV export of created users + temp passwords.
+- **Bulk CSV import for People (Feb 2026)**: `POST /api/users/bulk-import` (HR / Super Admin, max 500 rows). Auto-creates teams, resolves supervisors, auto-generates temp passwords, per-row created/skipped/errors response.
 - Company registration + JWT login (`/auth/register-company`, `/auth/login`, `/auth/me`)
 - People / team management (HR creates accounts with role / team / supervisor / language)
 - Task CRUD with role-scoped queries (`GET /tasks`) and role-gated creation
@@ -66,6 +72,7 @@ Build a full-stack workforce daily-update and task management system with AI int
 - React Native Android app
 
 ## Next action items
-- **User to-do (Play Store)**: follow `/app/PLAYSTORE_UPLOAD.md` — create Google Play account ($25), run `cd android && ./build.sh` to generate the signed AAB, paste SHA-256 fingerprint into `.well-known/assetlinks.json`, redeploy, upload AAB to Play Console Internal Testing. ETA ~30–45 min.
-- (Optional) Refactor `/app/backend/server.py` (1,900+ lines) into modular FastAPI routers — deferred at user request after final session
-- (Optional) Add Trello / Asana adapters alongside Jira (architecture supports it; only Jira shipped per Q3 b)
+- **User redeploy needed** (P0): redeploy production so the new `sw.js` v3 ships → resolves the white-screen / MIME-type errors users are seeing on `task-intelligence-13.emergent.host`. Currently-stuck users only need a single hard-refresh (Ctrl/Cmd+Shift+R) once the new SW is live.
+- **User to-do (APK distribution)**: on your laptop, `cd /app/android && ./build.sh` → produces `app-release-signed.apk`. Distribute via Drive/Slack/QR per `PLAYSTORE_UPLOAD.md`. (Play Store path is documented but explicitly deferred.)
+- (Optional) Refactor `/app/backend/server.py` (1,900+ lines) into modular FastAPI routers — deferred at user request
+- (Optional) Add Trello / Asana adapters alongside Jira
