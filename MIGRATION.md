@@ -210,13 +210,6 @@ tail -f /var/log/worklog/backend.err.log
 - Replace the Emergent URL (`https://task-intelligence-13.emergent.host/api/cron/...`) with your new URL.
 - Save → enable scenario.
 
-### Jira (only if you set it up)
-1. Atlassian Developer Console → your OAuth app → **Authorization → Configure**
-2. Update **Callback URL** to `https://worklog.yourcompany.com/integrations/jira/callback`
-3. Update `JIRA_REDIRECT_URI` in `backend/.env` to match
-4. Restart backend
-5. Any user previously connected will need to **Disconnect → Reconnect** (their old tokens were tied to the old redirect_uri).
-
 ### Object storage (if you don't keep `EMERGENT_LLM_KEY`)
 The attachment uploader uses Emergent's S3-compatible API via `EMERGENT_LLM_KEY`. To move to your own S3:
 1. Create an AWS S3 bucket (or Backblaze B2 / Wasabi — they're S3-compatible too)
