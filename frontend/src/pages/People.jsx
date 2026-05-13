@@ -11,6 +11,7 @@ import { Trash2, Pencil } from "lucide-react";
 import GdprPurgeDialog from "../components/GdprPurgeDialog";
 import EditPersonDialog from "../components/EditPersonDialog";
 import EditTeamDialog from "../components/EditTeamDialog";
+import BulkImportDialog from "../components/BulkImportDialog";
 import { toast } from "sonner";
 
 const ROLES = ["hr", "supervisor", "developer", "team_member", "employee"];
@@ -20,6 +21,7 @@ export default function People() {
   const [people, setPeople] = useState([]);
   const [teams, setTeams] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "employee", team_id: "", supervisor_id: "", timezone: "UTC", language: "en" });
   const canCreate = ["super_admin", "hr"].includes(user.role);
 
@@ -73,6 +75,7 @@ export default function People() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold tracking-tight">People</h1>
         <div className="flex gap-2">
+          {canCreate && <Button variant="outline" onClick={() => setShowBulk(true)} data-testid="bulk-import-btn"><Plus size={16} className="mr-1" /> Bulk import</Button>}
           {canCreate && <Button variant="outline" onClick={() => setShowCreateTeam(true)} data-testid="create-team-btn"><Plus size={16} className="mr-1" /> New team</Button>}
           {canCreate && <Button onClick={() => setShowCreate(true)} data-testid="create-user-btn"><Plus size={16} className="mr-1" /> Add person</Button>}
         </div>
@@ -260,6 +263,11 @@ export default function People() {
         team={editTeam}
         supervisors={supervisors}
         onSaved={load}
+      />
+      <BulkImportDialog
+        open={showBulk}
+        onOpenChange={setShowBulk}
+        onImported={load}
       />
     </div>
   );

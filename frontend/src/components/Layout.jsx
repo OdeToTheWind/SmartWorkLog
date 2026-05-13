@@ -4,9 +4,10 @@ import { useAuth, ROLE_COLOR, ROLE_LABEL } from "../lib/auth";
 import {
   HouseIcon as House, ListChecksIcon as ListChecks, UsersIcon as Users, BellIcon as Bell, CalendarIcon as Calendar, ChartLineUpIcon as ChartLineUp,
   ClipboardTextIcon as ClipboardText, SignOutIcon as SignOut, ListIcon as List, XIcon as X, TrophyIcon as Trophy, ShieldCheckIcon as ShieldCheck, KanbanIcon as Kanban,
-  LockKeyIcon as LockKey
+  LockKeyIcon as LockKey, EnvelopeSimpleIcon as Envelope
 } from "@phosphor-icons/react";
 import ChangePasswordDialog from "./ChangePasswordDialog";
+import ChangeEmailDialog from "./ChangeEmailDialog";
 
 const NAV_BY_ROLE = {
   employee: [
@@ -65,6 +66,7 @@ export default function Layout({ children }) {
   const loc = useLocation();
   const [mobOpen, setMobOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [emOpen, setEmOpen] = useState(false);
   if (!user) return null;
   const items = NAV_BY_ROLE[user.role] || [];
   const roleColor = ROLE_COLOR[user.role] || "#0F172A";
@@ -107,6 +109,14 @@ export default function Layout({ children }) {
             <div className="text-sm font-medium truncate">{user.name}</div>
             <div className="text-xs text-slate-500 truncate">{ROLE_LABEL[user.role]}</div>
           </div>
+          <button
+            data-testid="change-email-btn"
+            onClick={() => { setEmOpen(true); setMobOpen(false); }}
+            title="Change email"
+            className="p-2 hover:bg-slate-100 rounded-md text-slate-500"
+          >
+            <Envelope size={16} />
+          </button>
           <button
             data-testid="change-password-btn"
             onClick={() => { setPwOpen(true); setMobOpen(false); }}
@@ -158,6 +168,7 @@ export default function Layout({ children }) {
       </main>
 
       <ChangePasswordDialog open={pwOpen} onOpenChange={setPwOpen} />
+      <ChangeEmailDialog open={emOpen} onOpenChange={setEmOpen} />
     </div>
   );
 }

@@ -41,8 +41,16 @@ export const AuthProvider = ({ children }) => {
     } catch {} finally { setLoading(false); }
   };
 
+  const setSession = (token, nextUser) => {
+    if (token) localStorage.setItem("worklog_token", token);
+    if (nextUser) {
+      localStorage.setItem("worklog_user", JSON.stringify(nextUser));
+      setUser(nextUser);
+    }
+  };
+
   return (
-    <AuthCtx.Provider value={{ user, login, logout, registerCompany, refresh, loading }}>
+    <AuthCtx.Provider value={{ user, login, logout, registerCompany, refresh, loading, setSession }}>
       {children}
     </AuthCtx.Provider>
   );

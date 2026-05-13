@@ -355,6 +355,32 @@ async def change_password(body: ChangePasswordIn, u: TokenUser = Depends(current
     await audit(u.company_id, "password_changed", u.user_id, u.user_id, None, None, {"self": True})
     return {"ok": True}
 
+class ChangeEmailIn(BaseModel):
+    current_password: str
+    new_email: EmailStr
+
+@api.post("/auth/change-email")
+async def change_email(body: ChangeEmailIn, u: TokenUser = Depends(current_user)):
+    new_email = body.new_email.lower().strip()
+    user = await db.users.find_one({"id": u.user_id, "active": True}, {"_id": 0})
+    if not user:
+        raise HTTPException(404, "User not found")
+    if not verify_password(body.current_password, user["password_hash"]):
+        raise HTTPException(401, "Password is incorrect")
+    if new_email == user["email"].lower():
+        raise HTTPException(400, "New email must be different from current email")
+    clash = await db.users.find_one({"email": new_email, "id": {"$ne": u.user_id}}, {"_id": 0})
+    if clash:
+        raise HTTPException(400, "Email already in use by another account")
+    old_email = user["email"]
+    await db.users.update_one({"id": u.user_id}, {"$set": {"email": new_email}})
+    await audit(u.company_id, "email_changed", u.user_id, u.user_id, None, {"email": old_email}, {"email": new_email})
+    # Re-issue token with new email so the UI doesn't get logged out
+    user["email"] = new_email
+    token = make_token(user)
+    user.pop("password_hash", None)
+    return {"ok": True, "token": token, "user": {k: v for k, v in user.items() if k != "_id"}}
+
 # ---------- ROUTES: USERS / TEAMS ----------
 class UserProfileIn(BaseModel):
     name: Optional[str] = None
@@ -461,6 +487,121 @@ async def create_user(body: CreateUserIn, u: TokenUser = Depends(current_user)):
     doc.pop("password_hash", None)
     doc.pop("_id", None)
     return doc
+
+class BulkUserRowIn(BaseModel):
+    name: str
+    email: EmailStr
+    password: Optional[str] = None
+    role: str = "employee"
+    team_name: Optional[str] = None
+    supervisor_email: Optional[str] = None
+    timezone: str = "UTC"
+    language: str = "en"
+    telegram_id: Optional[str] = None
+
+class BulkUserImportIn(BaseModel):
+    rows: List[BulkUserRowIn]
+    create_missing_teams: bool = True
+
+def _gen_default_password(name: str) -> str:
+    # Predictable but per-row, so HR can communicate the temp pwd if generated.
+    base = "".join(ch for ch in (name or "user").lower() if ch.isalnum())[:6] or "user"
+    return f"{base}@{uuid.uuid4().hex[:6]}"
+
+@api.post("/users/bulk-import")
+async def bulk_import_users(body: BulkUserImportIn, u: TokenUser = Depends(current_user)):
+    if u.role not in ("super_admin", "hr"):
+        raise HTTPException(403, "Only Super Admin / HR can bulk-import users")
+    if not body.rows:
+        raise HTTPException(400, "No rows to import")
+    if len(body.rows) > 500:
+        raise HTTPException(400, "Maximum 500 rows per import")
+
+    # Preload existing emails (case-insensitive) and teams scoped to this company
+    existing_emails = {(d["email"] or "").lower() for d in await db.users.find({}, {"_id": 0, "email": 1}).to_list(50000)}
+    teams = await db.teams.find({"company_id": u.company_id}, {"_id": 0}).to_list(2000)
+    teams_by_name = {(t["name"] or "").strip().lower(): t for t in teams}
+    company_users = await db.users.find({"company_id": u.company_id}, {"_id": 0, "id": 1, "email": 1, "role": 1}).to_list(5000)
+    users_by_email = {(usr["email"] or "").lower(): usr for usr in company_users}
+
+    created, skipped, errors = [], [], []
+    seen_in_batch = set()
+
+    for idx, row in enumerate(body.rows):
+        line = idx + 1
+        try:
+            email = (row.email or "").lower().strip()
+            if not email or not row.name:
+                errors.append({"row": line, "email": email, "error": "name and email are required"})
+                continue
+            if email in seen_in_batch:
+                skipped.append({"row": line, "email": email, "reason": "duplicate in CSV"})
+                continue
+            seen_in_batch.add(email)
+            if email in existing_emails:
+                skipped.append({"row": line, "email": email, "reason": "email already exists"})
+                continue
+            if row.role not in ROLES:
+                errors.append({"row": line, "email": email, "error": f"invalid role '{row.role}'"})
+                continue
+            if u.role == "hr" and row.role == "super_admin":
+                errors.append({"row": line, "email": email, "error": "HR cannot create super_admin"})
+                continue
+
+            # Resolve team
+            team_id = None
+            if row.team_name:
+                key = row.team_name.strip().lower()
+                t = teams_by_name.get(key)
+                if not t and body.create_missing_teams:
+                    tid = gen_id()
+                    new_team = {"id": tid, "company_id": u.company_id, "name": row.team_name.strip(), "supervisor_id": None, "created_at": now_iso()}
+                    await db.teams.insert_one(new_team)
+                    teams_by_name[key] = new_team
+                    t = new_team
+                if t:
+                    team_id = t["id"]
+
+            # Resolve supervisor by email
+            supervisor_id = None
+            if row.supervisor_email:
+                sup_email = row.supervisor_email.lower().strip()
+                sup = users_by_email.get(sup_email)
+                if sup and sup.get("role") in ("supervisor", "hr", "super_admin"):
+                    supervisor_id = sup["id"]
+                elif sup_email:
+                    errors.append({"row": line, "email": email, "error": f"supervisor '{sup_email}' not found or not a supervisor"})
+                    continue
+
+            password = row.password or _gen_default_password(row.name)
+            user_id = gen_id()
+            doc = {
+                "id": user_id, "company_id": u.company_id, "name": row.name.strip(), "email": email,
+                "password_hash": hash_password(password), "role": row.role,
+                "team_id": team_id, "supervisor_id": supervisor_id,
+                "timezone": row.timezone or "UTC", "language": row.language or "en",
+                "telegram_id": row.telegram_id, "profile_photo_url": None, "streak_count": 0,
+                "notification_prefs": {"quiet_hours": None, "do_not_disturb": False},
+                "badges": [], "created_at": now_iso(), "active": True,
+            }
+            await db.users.insert_one(doc)
+            existing_emails.add(email)
+            users_by_email[email] = {"id": user_id, "email": email, "role": row.role}
+            created.append({
+                "row": line, "id": user_id, "email": email, "name": row.name.strip(),
+                "role": row.role, "temp_password": password if not row.password else None,
+            })
+        except Exception as exc:
+            errors.append({"row": line, "email": (row.email or ""), "error": str(exc)})
+
+    await audit(u.company_id, "user_bulk_import", u.user_id, None, None, None,
+                {"created": len(created), "skipped": len(skipped), "errors": len(errors)})
+    return {
+        "summary": {"total": len(body.rows), "created": len(created), "skipped": len(skipped), "errors": len(errors)},
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+    }
 
 @api.get("/users")
 async def list_users(u: TokenUser = Depends(current_user)):

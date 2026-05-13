@@ -20,6 +20,8 @@ Build a full-stack workforce daily-update and task management system with AI int
 
 ## Implemented (Feb 2026)
 - **Change Password (Feb 2026)**: `POST /api/auth/change-password` (current_password + new_password, 8-char min, must differ). UI: lock icon in sidebar footer opens `ChangePasswordDialog` with show/hide toggles, strength meter and confirm field. Available to all roles. Logged to audit (`password_changed`).
+- **Change Email (Feb 2026)**: `POST /api/auth/change-email` (current_password + new_email). Validates password, prevents duplicates and same-as-current. Re-issues JWT and updates session in-place so the user is not logged out. UI: envelope icon in sidebar footer opens `ChangeEmailDialog`. Logged to audit (`email_changed`).
+- **Bulk CSV import for People (Feb 2026)**: `POST /api/users/bulk-import` (HR / Super Admin, max 500 rows). Accepts rows with name, email + optional password/role/team_name/supervisor_email/timezone/language/telegram_id. Auto-creates missing teams (toggleable), resolves supervisor by email, auto-generates temporary password when omitted, returns per-row created/skipped/errors summary. UI: "Bulk import" button on People page opens `BulkImportDialog` with template download, client-side CSV parser, preview, results panel and CSV export of created users + temp passwords.
 - Company registration + JWT login (`/auth/register-company`, `/auth/login`, `/auth/me`)
 - People / team management (HR creates accounts with role / team / supervisor / language)
 - Task CRUD with role-scoped queries (`GET /tasks`) and role-gated creation
@@ -64,7 +66,6 @@ Build a full-stack workforce daily-update and task management system with AI int
 - React Native Android app
 
 ## Next action items
-- Bulk CSV import for people onboarding (P2, pending user confirmation)
 - Jira/Trello/Asana OAuth one-way sync for developers (P1, deferred)
-- Refactor `/app/backend/server.py` (1,500+ lines) into modular FastAPI routers (P3)
+- Refactor `/app/backend/server.py` (1,800+ lines) into modular FastAPI routers (P3)
 - Migrate `google-generativeai` → `google-genai` SDK (P3, user marked "not required")
