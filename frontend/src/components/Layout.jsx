@@ -3,8 +3,10 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth, ROLE_COLOR, ROLE_LABEL } from "../lib/auth";
 import {
   HouseIcon as House, ListChecksIcon as ListChecks, UsersIcon as Users, BellIcon as Bell, CalendarIcon as Calendar, ChartLineUpIcon as ChartLineUp,
-  ClipboardTextIcon as ClipboardText, SignOutIcon as SignOut, ListIcon as List, XIcon as X, TrophyIcon as Trophy, ShieldCheckIcon as ShieldCheck, KanbanIcon as Kanban
+  ClipboardTextIcon as ClipboardText, SignOutIcon as SignOut, ListIcon as List, XIcon as X, TrophyIcon as Trophy, ShieldCheckIcon as ShieldCheck, KanbanIcon as Kanban,
+  LockKeyIcon as LockKey
 } from "@phosphor-icons/react";
+import ChangePasswordDialog from "./ChangePasswordDialog";
 
 const NAV_BY_ROLE = {
   employee: [
@@ -62,6 +64,7 @@ export default function Layout({ children }) {
   const { user, logout } = useAuth();
   const loc = useLocation();
   const [mobOpen, setMobOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   if (!user) return null;
   const items = NAV_BY_ROLE[user.role] || [];
   const roleColor = ROLE_COLOR[user.role] || "#0F172A";
@@ -104,6 +107,14 @@ export default function Layout({ children }) {
             <div className="text-sm font-medium truncate">{user.name}</div>
             <div className="text-xs text-slate-500 truncate">{ROLE_LABEL[user.role]}</div>
           </div>
+          <button
+            data-testid="change-password-btn"
+            onClick={() => { setPwOpen(true); setMobOpen(false); }}
+            title="Change password"
+            className="p-2 hover:bg-slate-100 rounded-md text-slate-500"
+          >
+            <LockKey size={16} />
+          </button>
           <button data-testid="logout-btn" onClick={logout} className="p-2 hover:bg-slate-100 rounded-md text-slate-500">
             <SignOut size={16} />
           </button>
@@ -145,6 +156,8 @@ export default function Layout({ children }) {
       <main className="lg:ml-64 p-4 sm:p-8 min-h-screen">
         {children}
       </main>
+
+      <ChangePasswordDialog open={pwOpen} onOpenChange={setPwOpen} />
     </div>
   );
 }

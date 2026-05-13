@@ -19,6 +19,7 @@ Build a full-stack workforce daily-update and task management system with AI int
 6. Employee — own tasks + daily update
 
 ## Implemented (Feb 2026)
+- **Change Password (Feb 2026)**: `POST /api/auth/change-password` (current_password + new_password, 8-char min, must differ). UI: lock icon in sidebar footer opens `ChangePasswordDialog` with show/hide toggles, strength meter and confirm field. Available to all roles. Logged to audit (`password_changed`).
 - Company registration + JWT login (`/auth/register-company`, `/auth/login`, `/auth/me`)
 - People / team management (HR creates accounts with role / team / supervisor / language)
 - Task CRUD with role-scoped queries (`GET /tasks`) and role-gated creation
@@ -63,6 +64,7 @@ Build a full-stack workforce daily-update and task management system with AI int
 - React Native Android app
 
 ## Next action items
-- User to manually try priority escalation flow end-to-end
-- Optionally add chart (Recharts mood trend) on Dashboard
-- Phase 2 features by user priority
+- Bulk CSV import for people onboarding (P2, pending user confirmation)
+- Jira/Trello/Asana OAuth one-way sync for developers (P1, deferred)
+- Refactor `/app/backend/server.py` (1,500+ lines) into modular FastAPI routers (P3)
+- Migrate `google-generativeai` → `google-genai` SDK (P3, user marked "not required")

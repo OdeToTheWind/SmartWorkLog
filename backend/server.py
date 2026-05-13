@@ -336,6 +336,25 @@ async def me(u: TokenUser = Depends(current_user)):
         raise HTTPException(404, "User not found")
     return user
 
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
+@api.post("/auth/change-password")
+async def change_password(body: ChangePasswordIn, u: TokenUser = Depends(current_user)):
+    if len(body.new_password) < 8:
+        raise HTTPException(400, "New password must be at least 8 characters")
+    if body.current_password == body.new_password:
+        raise HTTPException(400, "New password must be different from current password")
+    user = await db.users.find_one({"id": u.user_id, "active": True}, {"_id": 0})
+    if not user:
+        raise HTTPException(404, "User not found")
+    if not verify_password(body.current_password, user["password_hash"]):
+        raise HTTPException(401, "Current password is incorrect")
+    await db.users.update_one({"id": u.user_id}, {"$set": {"password_hash": hash_password(body.new_password)}})
+    await audit(u.company_id, "password_changed", u.user_id, u.user_id, None, None, {"self": True})
+    return {"ok": True}
+
 # ---------- ROUTES: USERS / TEAMS ----------
 class UserProfileIn(BaseModel):
     name: Optional[str] = None
