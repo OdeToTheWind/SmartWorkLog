@@ -386,7 +386,10 @@ Quick env recap:
 
 Smart WorkLog has **no Emergent-specific runtime dependencies** — only the optional `EMERGENT_LLM_KEY` for attachment storage uses an Emergent API. Everything else is plain FastAPI + React + MongoDB and runs anywhere.
 
-Full step-by-step migration playbook: [`MIGRATION.md`](./MIGRATION.md)
+Two migration paths:
+
+- **[`VERCEL_DEPLOYMENT.md`](./VERCEL_DEPLOYMENT.md)** — Vercel (frontend) + Railway (backend) + MongoDB Atlas. **Free tier** for small teams, ~$5–10/month at scale. Total time ~90 min.
+- **[`MIGRATION.md`](./MIGRATION.md)** — Self-hosted Ubuntu VPS (nginx + supervisord + MongoDB on the same box). Maximum ownership, ~1–2 hr.
 
 TL;DR migration:
 1. Provision a VPS (Ubuntu 22.04, ≥2 vCPU / 4 GB / 40 GB)
@@ -408,7 +411,8 @@ ETA: **~1–2 hours**, including DNS propagation.
 | [`KEYS_AND_ENV.md`](./KEYS_AND_ENV.md)         | Every secret + where to obtain it, in one private file (do not commit)   |
 | [`ENV_REFERENCE.md`](./ENV_REFERENCE.md)       | Per-variable reference + key rotation guide                              |
 | [`DEPLOYMENT.md`](./DEPLOYMENT.md)             | Emergent-specific deployment notes + preview/production split            |
-| [`MIGRATION.md`](./MIGRATION.md)               | Step-by-step Emergent → self-hosted server playbook                      |
+| [`MIGRATION.md`](./MIGRATION.md)               | Step-by-step Emergent → self-hosted VPS playbook (Pattern C)             |
+| [`VERCEL_DEPLOYMENT.md`](./VERCEL_DEPLOYMENT.md) | Step-by-step Vercel + Railway deployment + full Emergent removal       |
 | [`PLAYSTORE_UPLOAD.md`](./PLAYSTORE_UPLOAD.md) | Android APK build kit + optional Play Store internal-testing walkthrough |
 | [`memory/PRD.md`](./memory/PRD.md)             | Original product spec + phase backlog                                    |
 
