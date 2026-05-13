@@ -476,17 +476,22 @@ No backend code changes needed.
 Share → "Add to Home Screen" (PWA install API is not available on iOS, no auto-prompt)
 
 ### Generate a real APK / Play Store build
-Wrap the PWA as a Trusted Web Activity (TWA). Google Play accepts TWAs as native apps.
+The complete build kit is already in this repo:
 
-```bash
-# Option A — PWABuilder web UI (fastest)
-open https://www.pwabuilder.com/        # paste your URL, click "Build" → "Android"
-
-# Option B — Bubblewrap CLI (Google's official tool, signs locally)
-npm i -g @bubblewrap/cli
-bubblewrap init --manifest=https://task-intelligence-13.emergent.host/manifest.json
-bubblewrap build      # produces app-release-signed.apk + app-release-bundle.aab
 ```
+/app/android/twa-manifest.json    # Bubblewrap config pre-filled for Smart WorkLog
+/app/android/build.sh             # One-command AAB build script
+/app/frontend/public/.well-known/assetlinks.json    # Domain↔APK verification template
+/app/PLAYSTORE_UPLOAD.md          # Complete step-by-step submission walkthrough
+```
+
+Run on your laptop:
+```bash
+cd /app/android
+./build.sh        # Produces app-release-bundle.aab + app-release-signed.apk
+```
+
+Then follow `/app/PLAYSTORE_UPLOAD.md` for the Play Console upload + tester invite flow (~30–45 min first time, ~5 min for updates).
 
 ### What's cached
 - All static assets (cache-first via service worker)

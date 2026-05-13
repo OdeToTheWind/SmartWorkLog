@@ -1,0 +1,55 @@
+{
+  "packageId": "host.emergent.smartworklog.twa",
+  "host": "task-intelligence-13.emergent.host",
+  "name": "Smart WorkLog AI",
+  "launcherName": "WorkLog",
+  "display": "standalone",
+  "themeColor": "#09090b",
+  "navigationColor": "#09090b",
+  "navigationColorDark": "#09090b",
+  "navigationDividerColor": "#09090b",
+  "navigationDividerColorDark": "#09090b",
+  "backgroundColor": "#09090b",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://task-intelligence-13.emergent.host/logo512.png",
+  "maskableIconUrl": "https://task-intelligence-13.emergent.host/logo512.png",
+  "monochromeIconUrl": "https://task-intelligence-13.emergent.host/logo512.png",
+  "appVersion": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Daily Update",
+      "shortName": "Update",
+      "url": "/daily-update",
+      "chosenIconUrl": "https://task-intelligence-13.emergent.host/logo192.png"
+    },
+    {
+      "name": "My Tasks",
+      "shortName": "Tasks",
+      "url": "/tasks",
+      "chosenIconUrl": "https://task-intelligence-13.emergent.host/logo192.png"
+    }
+  ],
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "android"
+  },
+  "splashScreenFadeOutDuration": 300,
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://task-intelligence-13.emergent.host/",
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "features": {
+    "locationDelegation": { "enabled": false },
+    "playBilling": { "enabled": false }
+  }
+}

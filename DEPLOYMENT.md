@@ -445,41 +445,22 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
 
 ## Android — Play Store build (PWA → TWA)
 
-The web app is a **PWA** and installs natively on Android out of the box (Chrome auto-prompt or "Add to Home Screen"). To publish to **Google Play**, wrap it as a **Trusted Web Activity (TWA)** — Google supports this as a first-class app type.
+A pre-filled build kit is already in the repo at `/app/android/`. The full upload walkthrough (Play Developer account → AAB build → asset links → Internal Testing → tester invites) is in **[`PLAYSTORE_UPLOAD.md`](./PLAYSTORE_UPLOAD.md)**.
 
-### Option A — PWABuilder (web UI, no code)
-
-1. Visit https://www.pwabuilder.com/.
-2. Paste your production URL (e.g. `https://task-intelligence-13.emergent.host`).
-3. Wait for the audit; fix any warnings (the manifest in this repo already passes the core checks).
-4. Click **Build** → **Android**. Choose **TWA package**.
-5. Download the generated **`.aab`** (Android App Bundle) and the suggested signing key info.
-6. Upload to **Google Play Console** → Create app → Release → Internal testing.
-
-### Option B — Bubblewrap CLI (Google's official tool)
+### TL;DR
 
 ```bash
-npm i -g @bubblewrap/cli
-bubblewrap init --manifest=https://task-intelligence-13.emergent.host/manifest.json
-# Answer the prompts — accept defaults where possible. Bubblewrap will:
-#  - create a signing keystore (save the password!)
-#  - download icons from your manifest
-#  - generate the Android Studio project
-bubblewrap build
-# Outputs: app-release-signed.apk  and  app-release-bundle.aab
+# On your laptop (Node 18+, JDK 17 required):
+cd /app/android
+./build.sh
 ```
 
-### Required by Play Store
-
-- A SHA-256 fingerprint of your signing certificate must be hosted at `<PUBLIC_BASE_URL>/.well-known/assetlinks.json` to prove ownership and unlock fullscreen mode. Bubblewrap prints the exact JSON to host. Put this file in `/app/frontend/public/.well-known/` and redeploy.
-- The TWA package targets `android.intent.action.VIEW` for the production domain only — preview deploys will fall back to a browser tab.
-
-### Updating the published Android app
-
-You do **not** need to rebuild and re-submit for every PWA change. The TWA just loads the live URL — pushing a new frontend build to production automatically updates the Android app's content on next launch. Only re-submit when:
-- `manifest.json` changes significantly (new shortcuts, icons, name)
-- You change the package name or target SDK
-- Google Play policy mandates a higher targetSdkVersion
+Bubblewrap will:
+1. Auto-install itself + the Android SDK on first run
+2. Prompt you for a signing keystore password (SAVE IT — Google Play cannot replace this key once published)
+3. Produce `app-release-bundle.aab` (for Play Console) + `app-release-signed.apk` (for sideload)
+4. Run `bubblewrap fingerprint` to get the SHA-256 → paste it into `/app/frontend/public/.well-known/assetlinks.json` → redeploy frontend
+5. Upload the AAB at https://play.google.com/console → your app → Internal testing → Create new release
 
 ---
 
@@ -500,6 +481,7 @@ If you enable the Jira integration (P1 feature), after deploy:
 
 - [`README.md`](./README.md) — full architecture, API reference, RBAC matrix
 - [`ENV_REFERENCE.md`](./ENV_REFERENCE.md) — all env vars + key rotation cheatsheet (private — do not commit)
+- [`PLAYSTORE_UPLOAD.md`](./PLAYSTORE_UPLOAD.md) — Google Play Internal Testing upload walkthrough (build kit + step-by-step submission)
 - [`memory/PRD.md`](./memory/PRD.md) — original spec + Phase 1 / Phase 2 / deferred backlog
 
 ---

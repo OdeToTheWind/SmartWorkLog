@@ -66,6 +66,6 @@ Build a full-stack workforce daily-update and task management system with AI int
 - React Native Android app
 
 ## Next action items
+- **User to-do (Play Store)**: follow `/app/PLAYSTORE_UPLOAD.md` — create Google Play account ($25), run `cd android && ./build.sh` to generate the signed AAB, paste SHA-256 fingerprint into `.well-known/assetlinks.json`, redeploy, upload AAB to Play Console Internal Testing. ETA ~30–45 min.
 - (Optional) Refactor `/app/backend/server.py` (1,900+ lines) into modular FastAPI routers — deferred at user request after final session
 - (Optional) Add Trello / Asana adapters alongside Jira (architecture supports it; only Jira shipped per Q3 b)
-- (Optional) Sign and submit the Android TWA build to Google Play Console
