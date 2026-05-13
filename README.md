@@ -50,7 +50,7 @@ Open the URL in any modern browser:
 
 Default seeded credentials (change on first login):
 - **Super Admin** — `admin@acme.com` / `pass1234`
-- **HR Manager** — `bhargavi.badal@gmail.com` / `hakuna2026`
+- **HR Manager** — `bhargavi.b@gmail.com` / `Hello102938`
 
 ### 2) The Android App (Internal Distribution)
 
