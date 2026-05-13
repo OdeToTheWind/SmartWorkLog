@@ -89,7 +89,7 @@ export default function Tasks() {
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px]">
-          <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
           <Input value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} placeholder="Search tasks..." className="pl-9" data-testid="task-search" />
         </div>
         <Select value={filter.priority || "all"} onValueChange={(v) => setFilter({ ...filter, priority: v === "all" ? "" : v })}>
@@ -106,10 +106,10 @@ export default function Tasks() {
             {STATUSES.map((s) => <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>)}
           </SelectContent>
         </Select>
-        <div className="flex bg-white border border-slate-200 rounded-md overflow-hidden">
-          <button onClick={() => setView("table")} className={`p-2 ${view === "table" ? "bg-slate-900 text-white" : "text-slate-500"}`} data-testid="view-table" title="Table"><Rows3 size={14} /></button>
-          <button onClick={() => setView("grid")} className={`p-2 ${view === "grid" ? "bg-slate-900 text-white" : "text-slate-500"}`} data-testid="view-grid" title="Cards"><LayoutGrid size={14} /></button>
-          <button onClick={() => setView("kanban")} className={`p-2 ${view === "kanban" ? "bg-slate-900 text-white" : "text-slate-500"}`} data-testid="view-kanban" title="Kanban">K</button>
+        <div className="flex bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-md overflow-hidden">
+          <button onClick={() => setView("table")} className={`p-2 ${view === "table" ? "bg-slate-900 text-white" : "text-slate-500 dark:text-zinc-400"}`} data-testid="view-table" title="Table"><Rows3 size={14} /></button>
+          <button onClick={() => setView("grid")} className={`p-2 ${view === "grid" ? "bg-slate-900 text-white" : "text-slate-500 dark:text-zinc-400"}`} data-testid="view-grid" title="Cards"><LayoutGrid size={14} /></button>
+          <button onClick={() => setView("kanban")} className={`p-2 ${view === "kanban" ? "bg-slate-900 text-white" : "text-slate-500 dark:text-zinc-400"}`} data-testid="view-kanban" title="Kanban">K</button>
         </div>
       </div>
 
@@ -118,7 +118,7 @@ export default function Tasks() {
           {["critical", ...STATUSES].slice(0,5).map((col) => {
             const items = filtered.filter((t) => col === "critical" ? t.priority === "critical" && t.status !== "done" : t.status === col);
             return (
-              <div key={col} className="bg-slate-100 rounded-lg p-2 min-h-[300px]" data-testid={`kanban-col-${col}`}>
+              <div key={col} className="bg-slate-100 dark:bg-zinc-800 rounded-lg p-2 min-h-[300px]" data-testid={`kanban-col-${col}`}>
                 <div className="label-eyebrow px-2 py-1.5 flex items-center justify-between">
                   <span>{col.replace("_", " ")}</span>
                   <span className="font-mono">{items.length}</span>
@@ -131,7 +131,7 @@ export default function Tasks() {
           })}
         </div>
       ) : view === "table" ? (
-        <div className="bg-white border border-slate-200 rounded-lg overflow-x-auto" data-testid="tasks-table">
+        <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg overflow-x-auto" data-testid="tasks-table">
           <Table>
             <TableHeader>
               <TableRow>
@@ -144,11 +144,11 @@ export default function Tasks() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500 py-8">No tasks match these filters.</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500 dark:text-zinc-400 py-8">No tasks match these filters.</TableCell></TableRow>}
               {filtered.map((t) => {
                 const assignee = peopleById[t.assigned_to_user_id];
                 return (
-                  <TableRow key={t.id} onClick={() => setDetail(t)} className="cursor-pointer hover:bg-slate-50" data-testid={`task-row-${t.id}`}>
+                  <TableRow key={t.id} onClick={() => setDetail(t)} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-800 dark:bg-zinc-950" data-testid={`task-row-${t.id}`}>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <span className="priority-dot" style={{ background: PRIORITY_COLOR[t.priority] }} />
@@ -160,7 +160,7 @@ export default function Tasks() {
                     </TableCell>
                     <TableCell><Badge variant="secondary" className="uppercase text-[10px]">{t.status.replace("_"," ")}</Badge></TableCell>
                     <TableCell className="text-xs">{assignee?.name || "—"}</TableCell>
-                    <TableCell className="text-xs text-slate-500">{t.type}</TableCell>
+                    <TableCell className="text-xs text-slate-500 dark:text-zinc-400">{t.type}</TableCell>
                     <TableCell className="text-xs">{t.due_date ? new Date(t.due_date).toLocaleDateString() : "—"}</TableCell>
                   </TableRow>
                 );
@@ -171,7 +171,7 @@ export default function Tasks() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((t) => <TaskCard key={t.id} task={t} onChange={load} onEscalate={setEscalate} />)}
-          {filtered.length === 0 && <div className="text-sm text-slate-500 col-span-full text-center py-8">No tasks yet.</div>}
+          {filtered.length === 0 && <div className="text-sm text-slate-500 dark:text-zinc-400 col-span-full text-center py-8">No tasks yet.</div>}
         </div>
       )}
 

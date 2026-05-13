@@ -33,11 +33,11 @@ export default function GdprPurgeDialog({ open, onOpenChange, user, onPurged }) 
         {step === 1 ? (
           <div className="space-y-3">
             <p className="text-sm">You're about to <strong>permanently delete</strong> all data for:</p>
-            <div className="bg-slate-100 p-3 rounded text-sm">
+            <div className="bg-slate-100 dark:bg-zinc-800 p-3 rounded text-sm">
               <div className="font-medium">{user.name}</div>
-              <div className="text-xs text-slate-500">{user.email} · {user.role}</div>
+              <div className="text-xs text-slate-500 dark:text-zinc-400">{user.email} · {user.role}</div>
             </div>
-            <p className="text-xs text-slate-600">This removes: account, tasks, daily updates, leave, notifications, audit entries (for/by this user), attachments. <strong>Irreversible.</strong></p>
+            <p className="text-xs text-slate-600 dark:text-zinc-300">This removes: account, tasks, daily updates, leave, notifications, audit entries (for/by this user), attachments. <strong>Irreversible.</strong></p>
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button variant="destructive" onClick={() => setStep(2)} data-testid="gdpr-next">Continue</Button>
@@ -45,7 +45,7 @@ export default function GdprPurgeDialog({ open, onOpenChange, user, onPurged }) 
           </div>
         ) : (
           <div className="space-y-3">
-            <Label className="text-xs">Type <code className="bg-slate-100 px-1.5 py-0.5 rounded">DELETE PERMANENTLY</code> to confirm</Label>
+            <Label className="text-xs">Type <code className="bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">DELETE PERMANENTLY</code> to confirm</Label>
             <Input value={confirm} onChange={(e) => setConfirm(e.target.value)} data-testid="gdpr-confirm-input" />
             <DialogFooter>
               <Button variant="outline" onClick={() => setStep(1)}>Back</Button>

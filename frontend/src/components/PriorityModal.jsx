@@ -65,7 +65,7 @@ export default function PriorityModal({ open, onOpenChange, task, otherTasks = [
                   key={lv}
                   data-testid={`priority-option-${lv}`}
                   onClick={() => setNewPriority(lv)}
-                  className={`px-3 py-2 rounded-md text-xs font-medium uppercase border transition-all ${newPriority === lv ? "text-white" : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"}`}
+                  className={`px-3 py-2 rounded-md text-xs font-medium uppercase border transition-all ${newPriority === lv ? "text-white" : "bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-200 border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:border-zinc-700"}`}
                   style={newPriority === lv ? { background: PRIORITY_COLOR[lv], borderColor: PRIORITY_COLOR[lv] } : {}}
                 >
                   {lv}
@@ -84,14 +84,14 @@ export default function PriorityModal({ open, onOpenChange, task, otherTasks = [
               rows={3}
               className="mt-1"
             />
-            <div className="text-xs text-slate-500 mt-1">{reason.length} / 10</div>
+            <div className="text-xs text-slate-500 dark:text-zinc-400 mt-1">{reason.length} / 10</div>
           </div>
           <div className="flex items-center justify-between">
             <Label htmlFor="sacrifice-toggle" className="text-sm">Requires sacrificing other tasks?</Label>
             <Switch id="sacrifice-toggle" data-testid="sacrifice-toggle" checked={requiresSacrifice} onCheckedChange={setRequiresSacrifice} />
           </div>
           {requiresSacrifice && (
-            <div className="border border-slate-200 rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
+            <div className="border border-slate-200 dark:border-zinc-800 rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
               <div className="label-eyebrow">Select tasks to deprioritise</div>
               {otherTasks.filter((t) => t.id !== task.id && t.status !== "done").map((t) => (
                 <label key={t.id} className="flex items-center gap-2 text-sm">
@@ -104,7 +104,7 @@ export default function PriorityModal({ open, onOpenChange, task, otherTasks = [
                   <span>{t.title}</span>
                 </label>
               ))}
-              {otherTasks.length === 0 && <div className="text-xs text-slate-500">No other tasks available.</div>}
+              {otherTasks.length === 0 && <div className="text-xs text-slate-500 dark:text-zinc-400">No other tasks available.</div>}
             </div>
           )}
         </div>

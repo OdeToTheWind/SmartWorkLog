@@ -14,7 +14,7 @@ export default function SLAWidget() {
 
   const compliant = sla.compliance_pct >= 80;
   return (
-    <Card data-testid="sla-widget" className="border-slate-200">
+    <Card data-testid="sla-widget" className="border-slate-200 dark:border-zinc-800">
       <CardHeader className="flex flex-row items-center gap-2">
         <Timer size={18} className={compliant ? "text-emerald-600" : "text-red-600"} />
         <CardTitle className="text-base">Critical-task SLA (30 days)</CardTitle>
@@ -24,7 +24,7 @@ export default function SLAWidget() {
           <div>
             <div className="label-eyebrow">Avg ack time</div>
             <div className="stat-num mt-1" style={{ color: compliant ? "#0F172A" : "#DC2626" }}>
-              {sla.avg_ack_minutes}<span className="text-base text-slate-500 font-normal ml-1">min</span>
+              {sla.avg_ack_minutes}<span className="text-base text-slate-500 dark:text-zinc-400 font-normal ml-1">min</span>
             </div>
           </div>
           <div>
@@ -42,7 +42,7 @@ export default function SLAWidget() {
             </div>
           </div>
         </div>
-        <div className="mt-4 text-xs text-slate-500 flex items-center gap-2">
+        <div className="mt-4 text-xs text-slate-500 dark:text-zinc-400 flex items-center gap-2">
           {compliant ? <CheckCircle size={14} className="text-emerald-600" /> : <AlertTriangle size={14} className="text-red-600" />}
           <span>SLA target: acknowledge within 30 minutes. {sla.over_30min_count} breaches in last 30 days.</span>
         </div>

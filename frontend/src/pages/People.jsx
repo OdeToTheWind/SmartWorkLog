@@ -82,7 +82,7 @@ export default function People() {
       </div>
 
       {teams.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-lg p-4" data-testid="teams-section">
+        <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-4" data-testid="teams-section">
           <div className="label-eyebrow mb-3">Teams ({teams.length})</div>
           <div className="flex flex-wrap gap-2">
             {teams.map((t) => {
@@ -93,14 +93,14 @@ export default function People() {
                   key={t.id}
                   onClick={() => canCreate && setEditTeam(t)}
                   disabled={!canCreate}
-                  className={`bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-left ${canCreate ? "hover:bg-slate-100 hover:border-slate-300 cursor-pointer" : ""}`}
+                  className={`bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-md px-3 py-2 text-sm text-left ${canCreate ? "hover:bg-slate-100 dark:hover:bg-zinc-800 dark:bg-zinc-800 hover:border-slate-300 dark:border-zinc-700 cursor-pointer" : ""}`}
                   data-testid={`team-${t.id}`}
                 >
                   <div className="font-medium flex items-center gap-1">
                     {t.name}
-                    {canCreate && <Pencil size={11} className="text-slate-400" />}
+                    {canCreate && <Pencil size={11} className="text-slate-400 dark:text-zinc-500" />}
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-slate-500 dark:text-zinc-400">
                     {memberCount} member{memberCount !== 1 ? "s" : ""}
                     {sup && <> · sup: {sup.name}</>}
                   </div>
@@ -113,24 +113,24 @@ export default function People() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {people.map((p) => (
-          <div key={p.id} className="bg-white border border-slate-200 rounded-lg p-4" data-testid={`people-card-${p.id}`}>
+          <div key={p.id} className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-4" data-testid={`people-card-${p.id}`}>
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-md flex items-center justify-center text-white text-base font-semibold" style={{ background: ROLE_COLOR[p.role] }}>
                 {p.name?.[0]?.toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{p.name}</div>
-                <div className="text-xs text-slate-500 truncate">{p.email}</div>
+                <div className="text-xs text-slate-500 dark:text-zinc-400 truncate">{p.email}</div>
               </div>
             </div>
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               <span className="role-pill" style={{ background: `${ROLE_COLOR[p.role]}15`, color: ROLE_COLOR[p.role] }}>{ROLE_LABEL[p.role]}</span>
-              {p.streak_count > 0 && <span className="text-xs text-slate-500">{p.streak_count}d streak</span>}
+              {p.streak_count > 0 && <span className="text-xs text-slate-500 dark:text-zinc-400">{p.streak_count}d streak</span>}
               <div className="ml-auto flex gap-1">
                 {canCreate && p.id !== user.user_id && (
                   <button
                     onClick={() => setEditPerson(p)}
-                    className="text-slate-500 hover:text-slate-900 p-1 rounded"
+                    className="text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:text-zinc-50 p-1 rounded"
                     data-testid={`edit-btn-${p.id}`}
                     title="Edit person"
                   >
@@ -235,7 +235,7 @@ export default function People() {
                   {supervisors.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <div className="text-xs text-slate-500 mt-1">
+              <div className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
                 {supervisors.length === 0
                   ? "No supervisors yet — create one first via 'Add person' with role=Supervisor"
                   : `${supervisors.length} supervisor${supervisors.length === 1 ? "" : "s"} available`}

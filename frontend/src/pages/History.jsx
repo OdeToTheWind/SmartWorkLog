@@ -44,7 +44,7 @@ export default function History() {
     last30.push({ date: iso, mood: has?.mood_score || 0, has: !!has });
   }
   const heatColor = (mood) => {
-    if (!mood) return "bg-slate-100";
+    if (!mood) return "bg-slate-100 dark:bg-zinc-800";
     if (mood >= 5) return "bg-emerald-500";
     if (mood >= 4) return "bg-emerald-400";
     if (mood >= 3) return "bg-amber-400";
@@ -68,7 +68,7 @@ export default function History() {
         <CardHeader><CardTitle className="text-base">30-day mood trend</CardTitle></CardHeader>
         <CardContent>
           {trend.length === 0 ? (
-            <div className="text-sm text-slate-500 py-8 text-center">Submit a few daily updates to see your trend.</div>
+            <div className="text-sm text-slate-500 dark:text-zinc-400 py-8 text-center">Submit a few daily updates to see your trend.</div>
           ) : (
             <div style={{ width: "100%", height: 220 }}>
               <ResponsiveContainer>
@@ -96,9 +96,9 @@ export default function History() {
                 data-testid={`heat-${d.date}`} />
             ))}
           </div>
-          <div className="flex items-center gap-2 mt-4 text-xs text-slate-500">
+          <div className="flex items-center gap-2 mt-4 text-xs text-slate-500 dark:text-zinc-400">
             <span>Less</span>
-            <span className="w-3 h-3 rounded bg-slate-100" />
+            <span className="w-3 h-3 rounded bg-slate-100 dark:bg-zinc-800" />
             <span className="w-3 h-3 rounded bg-orange-400" />
             <span className="w-3 h-3 rounded bg-amber-400" />
             <span className="w-3 h-3 rounded bg-emerald-400" />
@@ -117,7 +117,7 @@ export default function History() {
               {LANGUAGES.map((l) => <SelectItem key={l.code} value={l.code}>{l.label}</SelectItem>)}
             </SelectContent>
           </Select>
-          <div className="text-xs text-slate-500 mt-2">Telegram replies and AI-generated text use this language.</div>
+          <div className="text-xs text-slate-500 dark:text-zinc-400 mt-2">Telegram replies and AI-generated text use this language.</div>
         </CardContent>
       </Card>
 
@@ -127,7 +127,7 @@ export default function History() {
           <Label className="text-xs">Your Telegram chat ID</Label>
           <Input value={telegramId} onChange={(e) => setTelegramId(e.target.value)} placeholder="e.g. 123456789" data-testid="telegram-id-input" />
           <Button onClick={linkTelegram} data-testid="telegram-link-btn">Link Telegram</Button>
-          <div className="text-xs text-slate-500">After deployment, set TELEGRAM_BOT_TOKEN env and configure the webhook → <code>/api/telegram/webhook</code>.</div>
+          <div className="text-xs text-slate-500 dark:text-zinc-400">After deployment, set TELEGRAM_BOT_TOKEN env and configure the webhook → <code>/api/telegram/webhook</code>.</div>
         </CardContent>
       </Card>
     </div>

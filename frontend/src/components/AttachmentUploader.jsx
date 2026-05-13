@@ -43,9 +43,9 @@ export default function AttachmentUploader({ taskId, dailyUpdateDate, onUploaded
       {items.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {items.map((f) => (
-            <div key={f.id} className="inline-flex items-center gap-1.5 bg-slate-100 rounded-md px-2 py-1 text-xs" data-testid={`attached-${f.id}`}>
+            <div key={f.id} className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-800 rounded-md px-2 py-1 text-xs" data-testid={`attached-${f.id}`}>
               <span className="truncate max-w-[160px]">{f.original_filename}</span>
-              <button onClick={() => remove(f.id)} className="text-slate-500 hover:text-red-600"><X size={12} /></button>
+              <button onClick={() => remove(f.id)} className="text-slate-500 dark:text-zinc-400 hover:text-red-600"><X size={12} /></button>
             </div>
           ))}
         </div>

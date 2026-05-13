@@ -32,6 +32,7 @@ body {
     -webkit-font-smoothing: antialiased;
     background: var(--bg-default);
     color: var(--text-primary);
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -72,6 +73,36 @@ h1, h2, h3, h4, h5, h6 {
         --ring: 215 16% 47%;
         --radius: 0.5rem;
     }
+    /* Dark mode — zinc-950 / zinc-50 / zinc-800 palette */
+    .dark {
+        --bg-default: #09090b;     /* zinc-950 */
+        --bg-surface: #18181b;     /* zinc-900 */
+        --bg-surface-hover: #27272a;/* zinc-800 */
+        --text-primary: #fafafa;   /* zinc-50 */
+        --text-secondary: #a1a1aa; /* zinc-400 */
+        --text-tertiary: #71717a;  /* zinc-500 */
+        --border-default: #27272a; /* zinc-800 */
+
+        --background: 240 5.9% 6%;        /* zinc-950 */
+        --foreground: 0 0% 98%;            /* zinc-50 */
+        --card: 240 5.9% 10%;              /* zinc-900 */
+        --card-foreground: 0 0% 98%;
+        --popover: 240 5.9% 10%;
+        --popover-foreground: 0 0% 98%;
+        --primary: 0 0% 98%;
+        --primary-foreground: 240 5.9% 10%;
+        --secondary: 240 3.7% 15.9%;       /* zinc-800 */
+        --secondary-foreground: 0 0% 98%;
+        --muted: 240 3.7% 15.9%;
+        --muted-foreground: 240 5% 64.9%;
+        --accent: 240 3.7% 15.9%;
+        --accent-foreground: 0 0% 98%;
+        --destructive: 0 62.8% 50.6%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 240 3.7% 15.9%;          /* zinc-800 */
+        --input: 240 3.7% 15.9%;
+        --ring: 240 4.9% 83.9%;
+    }
 }
 
 @layer base {
@@ -99,3 +130,17 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 [dir="rtl"] { direction: rtl; }
+
+/* AI accent gradient — used for AI-driven CTA buttons */
+.ai-gradient {
+    background-image: linear-gradient(to right, #6366f1, #a855f7, #ec4899);
+    color: #fff;
+    border: none;
+}
+.ai-gradient:hover {
+    background-image: linear-gradient(to right, #4f46e5, #9333ea, #db2777);
+    color: #fff;
+}
+.ai-gradient-ring {
+    background-image: linear-gradient(to right, #6366f1, #a855f7, #ec4899);
+}

@@ -33,7 +33,7 @@ export default function TaskDetailDialog({ open, onOpenChange, task, peopleById,
           {task.description && (
             <div>
               <div className="label-eyebrow mb-1">Description</div>
-              <div className="text-slate-700 whitespace-pre-wrap">{task.description}</div>
+              <div className="text-slate-700 dark:text-zinc-200 whitespace-pre-wrap">{task.description}</div>
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -79,7 +79,7 @@ export default function TaskDetailDialog({ open, onOpenChange, task, peopleById,
               <div className="font-semibold mb-1">Blocker</div>{task.blocker_text}
             </div>
           )}
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-slate-500 dark:text-zinc-400">
             Created {new Date(task.created_at).toLocaleString()}<br />
             Last updated {new Date(task.updated_at).toLocaleString()}
             {task.acknowledged_at && <><br />Acknowledged {new Date(task.acknowledged_at).toLocaleString()}</>}

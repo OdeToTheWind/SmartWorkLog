@@ -47,7 +47,11 @@ Layered on top:
 - Make.com automation — 18:00 IST daily digest + Friday weekly PDF report
 - Leave management, in-app notifications, gamification (streaks + badges + weekly leaderboard)
 - 7-language i18n with RTL for Arabic/Urdu
-- PWA: installable on Android, offline-capable
+- **Light / Dark mode** with system-preference detection + manual override (zinc-950 / zinc-50 / zinc-800 palette in dark; AI buttons use indigo→purple→pink gradient)
+- **Change password** & **Change email** self-service for any role (sidebar footer icons)
+- **Bulk CSV import** of people (HR / Super Admin, up to 500 rows, auto-creates missing teams + temp passwords)
+- **Jira OAuth one-way sync** — developers connect their Jira workspace, assigned issues mirror as technical tasks (priority/status mapped)
+- PWA: installable on Android (auto-prompt + standalone display), offline-capable. Generate a real APK via PWABuilder or Bubblewrap (see DEPLOYMENT.md)
 
 ---
 
@@ -94,7 +98,7 @@ Layered on top:
 | Frontend     | React 19, React Router, Tailwind CSS, shadcn/ui, Recharts, @phosphor-icons/react, lucide-react, sonner toast, axios |
 | Backend      | FastAPI, motor (async MongoDB), pydantic, bcrypt, PyJWT, requests |
 | Database     | MongoDB (multi-tenant, scoped by `company_id`) |
-| AI           | **Gemini 2.5 Flash** via `google-generativeai` (direct Google API) |
+| AI           | **Gemini 2.5 Flash** via `google-genai` SDK (direct Google API) |
 | Scheduler    | APScheduler (in-process AsyncIOScheduler)     |
 | PDF          | reportlab                                     |
 | File storage | Emergent managed object storage               |
@@ -199,10 +203,18 @@ Hierarchy (highest → lowest):
 - AR/UR automatically switch to RTL layout
 - Telegram replies + AI text auto-translate to user's preferred language
 
-### PWA
-- Installable on Android (Chrome → Install app) and iOS (Safari → Add to Home Screen)
+### PWA & Android install
+- Installable on Android (Chrome menu → **Install app** or in-app **Install** banner that auto-appears) and iOS (Safari → Add to Home Screen)
+- Manifest includes shortcuts (Daily Update, My Tasks), maskable icons, and `display: standalone` so the app opens fullscreen with no browser chrome
 - Service worker caches static assets (cache-first) and `/api/*` (network-first with cache fallback)
-- Custom icon and splash colors via `manifest.json`
+- Theme-aware status bar — dark `#09090b` in dark mode, light `#FAFAFA` in light mode
+- **APK build**: use [PWABuilder](https://www.pwabuilder.com/) (web GUI) or [Bubblewrap CLI](https://github.com/GoogleChromeLabs/bubblewrap) to wrap the PWA as a Trusted Web Activity for Google Play submission — see DEPLOYMENT.md
+
+### Light / Dark mode
+- Three-state toggle: **System / Light / Dark** — icon in the sidebar footer (sun, moon, or desktop)
+- Honors `prefers-color-scheme`; manual choice persisted in `localStorage.worklog_theme`
+- Dark palette: `bg-zinc-950` / `text-zinc-50` / `border-zinc-800` (shadcn-mapped CSS variables)
+- **AI-distinct CTAs** — every Gemini-powered button uses the `ai-gradient` class (indigo → purple → pink)
 
 ### GDPR right-to-delete
 - HR/Super Admin only
@@ -254,11 +266,14 @@ All routes are prefixed with `/api`. Authentication via `Authorization: Bearer <
 | POST   | `/api/auth/register-company`        | Create company + super admin                       |
 | POST   | `/api/auth/login`                   | Returns `{token, user}`                            |
 | GET    | `/api/auth/me`                      | Current user                                       |
+| POST   | `/api/auth/change-password`         | `{current_password, new_password}` — 8 char min    |
+| POST   | `/api/auth/change-email`            | `{current_password, new_email}` — re-issues JWT    |
 
 ### Users & Teams
 | Method | Path                       | Roles                | Description                                    |
 | ------ | -------------------------- | -------------------- | ---------------------------------------------- |
 | POST   | `/api/users`               | super_admin, hr      | Create user (role/team/supervisor/lang/tg)     |
+| POST   | `/api/users/bulk-import`   | super_admin, hr      | CSV bulk import (up to 500 rows)               |
 | GET    | `/api/users`               | all                  | Scoped list (supervisor sees team only)        |
 | PATCH  | `/api/users/me`            | all                  | Update own timezone, language, telegram, prefs |
 | DELETE | `/api/users/{id}/purge`    | hr, super_admin      | GDPR purge (body: `{"confirmation_text": "DELETE PERMANENTLY"}`) |
@@ -337,6 +352,15 @@ All routes are prefixed with `/api`. Authentication via `Authorization: Bearer <
 | ------ | ----------------------------------- | ------------------------------------------------- |
 | POST   | `/api/admin/run-digest-now`         | Manual digest for own company (hr/super_admin)    |
 | POST   | `/api/admin/run-weekly-pdf-now`     | Manual weekly PDF                                 |
+
+### Integrations: Jira (OAuth 2.0 3LO, one-way read-only sync)
+| Method | Path                                | Description                                                              |
+| ------ | ----------------------------------- | ------------------------------------------------------------------------ |
+| GET    | `/api/integrations/jira/status`     | Whether server is configured and the current user is connected           |
+| GET    | `/api/integrations/jira/auth-url`   | Returns Atlassian OAuth authorize URL with a CSRF state                  |
+| POST   | `/api/integrations/jira/callback`   | `{code, state}` — exchanges auth code for tokens, stores them encrypted  |
+| POST   | `/api/integrations/jira/sync`       | Pulls up to 200 assigned Jira issues, mirrors them as technical tasks    |
+| POST   | `/api/integrations/jira/disconnect` | Deletes the stored Jira tokens for current user                          |
 
 ---
 
@@ -442,17 +466,32 @@ No backend code changes needed.
 
 ### From Chrome on Android
 1. Visit the live URL
-2. Tap ⋮ menu → **Install app** (or "Add to Home screen")
-3. Smart WorkLog icon appears on home screen
-4. Tap → opens full-screen, no browser chrome
-5. Offline pages cached automatically; daily updates queue and sync when back online
+2. **Auto-prompt**: a gradient "Install Smart WorkLog" banner appears at the bottom — tap **Install**
+3. Or tap ⋮ menu → **Install app** (Add to Home Screen)
+4. Smart WorkLog icon appears on home screen
+5. Tap → opens full-screen (no browser chrome). The `manifest.json` declares `display: standalone`, so it looks native.
+6. Offline pages cached automatically; daily updates queue and sync when back online
 
 ### From iOS Safari
-Share → "Add to Home Screen"
+Share → "Add to Home Screen" (PWA install API is not available on iOS, no auto-prompt)
+
+### Generate a real APK / Play Store build
+Wrap the PWA as a Trusted Web Activity (TWA). Google Play accepts TWAs as native apps.
+
+```bash
+# Option A — PWABuilder web UI (fastest)
+open https://www.pwabuilder.com/        # paste your URL, click "Build" → "Android"
+
+# Option B — Bubblewrap CLI (Google's official tool, signs locally)
+npm i -g @bubblewrap/cli
+bubblewrap init --manifest=https://task-intelligence-13.emergent.host/manifest.json
+bubblewrap build      # produces app-release-signed.apk + app-release-bundle.aab
+```
 
 ### What's cached
 - All static assets (cache-first via service worker)
 - `/api/*` responses (network-first with cache fallback for offline reads)
+- Manifest now includes app shortcuts (Daily Update, My Tasks) — long-press the home-screen icon to access them
 
 ---
 

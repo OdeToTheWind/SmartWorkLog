@@ -1,14 +1,37 @@
 {
-  "short_name": "WorkLog",
   "name": "Smart WorkLog AI",
+  "short_name": "WorkLog",
+  "description": "AI-powered workforce daily updates, priority escalation and team intelligence.",
+  "id": "/",
+  "scope": "/",
+  "start_url": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "theme_color": "#09090b",
+  "background_color": "#09090b",
+  "categories": ["productivity", "business"],
+  "lang": "en",
+  "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
     { "src": "favicon.ico", "sizes": "64x64 32x32 24x24 16x16", "type": "image/x-icon" },
-    { "src": "logo192.png", "type": "image/png", "sizes": "192x192" },
-    { "src": "logo512.png", "type": "image/png", "sizes": "512x512" }
+    { "src": "logo192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "logo192.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
+    { "src": "logo512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "logo512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
   ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#0F172A",
-  "background_color": "#FAFAFA",
-  "description": "AI-powered workforce daily updates, priority escalation and team intelligence."
+  "shortcuts": [
+    {
+      "name": "Daily Update",
+      "short_name": "Update",
+      "description": "Log today's progress",
+      "url": "/daily-update"
+    },
+    {
+      "name": "My Tasks",
+      "short_name": "Tasks",
+      "url": "/tasks"
+    }
+  ]
 }

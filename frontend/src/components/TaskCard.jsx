@@ -23,7 +23,7 @@ export default function TaskCard({ task, onChange, onEscalate, canEdit = true })
   return (
     <div
       data-testid={`task-card-${task.id}`}
-      className={`bg-white border rounded-lg p-4 transition-all hover:shadow-sm hover:-translate-y-[1px] ${isCritical ? "border-red-500 critical-pulse" : "border-slate-200"}`}
+      className={`bg-white dark:bg-zinc-900 border rounded-lg p-4 transition-all hover:shadow-sm hover:-translate-y-[1px] ${isCritical ? "border-red-500 critical-pulse" : "border-slate-200 dark:border-zinc-800"}`}
     >
       <div className="flex items-start gap-3">
         <span className="priority-dot mt-2" style={{ background: PRIORITY_COLOR[task.priority] }} />
@@ -31,7 +31,7 @@ export default function TaskCard({ task, onChange, onEscalate, canEdit = true })
           <div className="flex items-start gap-2">
             <div className="flex-1">
               <div className="font-medium text-sm leading-tight">{task.title}</div>
-              {task.description && <div className="text-xs text-slate-500 mt-1 line-clamp-2">{task.description}</div>}
+              {task.description && <div className="text-xs text-slate-500 dark:text-zinc-400 mt-1 line-clamp-2">{task.description}</div>}
             </div>
             <Badge
               variant="outline"
@@ -45,7 +45,7 @@ export default function TaskCard({ task, onChange, onEscalate, canEdit = true })
           <div className="flex items-center gap-2 mt-3 flex-wrap">
             <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">{task.status?.replace("_", " ")}</Badge>
             {task.due_date && (
-              <span className="text-[11px] text-slate-500 inline-flex items-center gap-1">
+              <span className="text-[11px] text-slate-500 dark:text-zinc-400 inline-flex items-center gap-1">
                 <Clock size={12} /> {new Date(task.due_date).toLocaleDateString()}
               </span>
             )}

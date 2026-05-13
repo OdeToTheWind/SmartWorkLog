@@ -168,9 +168,9 @@ export default function BulkImportDialog({ open, onOpenChange, onImported }) {
 
         {!result && (
           <div className="space-y-4">
-            <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center bg-slate-50">
-              <UploadSimpleIcon size={28} className="mx-auto text-slate-400" />
-              <p className="text-sm text-slate-600 mt-2">Choose a CSV file to import</p>
+            <div className="border-2 border-dashed border-slate-300 dark:border-zinc-700 rounded-lg p-6 text-center bg-slate-50 dark:bg-zinc-950">
+              <UploadSimpleIcon size={28} className="mx-auto text-slate-400 dark:text-zinc-500" />
+              <p className="text-sm text-slate-600 dark:text-zinc-300 mt-2">Choose a CSV file to import</p>
               <input
                 ref={inputRef}
                 type="file"
@@ -187,13 +187,13 @@ export default function BulkImportDialog({ open, onOpenChange, onImported }) {
                   <DownloadSimpleIcon size={14} className="mr-1" /> Download template
                 </Button>
               </div>
-              {fileName && <p className="text-xs text-slate-500 mt-2 truncate">Selected: {fileName}</p>}
+              {fileName && <p className="text-xs text-slate-500 dark:text-zinc-400 mt-2 truncate">Selected: {fileName}</p>}
             </div>
 
-            <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded p-3">
+            <div className="text-xs text-slate-600 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded p-3">
               <div className="font-semibold mb-1">Columns</div>
               <div><span className="text-red-600">required</span>: {REQUIRED_COLS.join(", ")}</div>
-              <div><span className="text-slate-500">optional</span>: {OPTIONAL_COLS.join(", ")}</div>
+              <div><span className="text-slate-500 dark:text-zinc-400">optional</span>: {OPTIONAL_COLS.join(", ")}</div>
               <div className="mt-1">Allowed roles: <code className="font-mono">employee, team_member, developer, supervisor, hr</code>. If <code>password</code> is empty, a temporary one is generated and returned.</div>
             </div>
 
@@ -207,7 +207,7 @@ export default function BulkImportDialog({ open, onOpenChange, onImported }) {
               <div className="space-y-2" data-testid="bulk-preview">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm">Preview ({parsed.data.length} rows)</Label>
-                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                  <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-zinc-300">
                     <input
                       type="checkbox"
                       checked={createMissingTeams}
@@ -217,18 +217,18 @@ export default function BulkImportDialog({ open, onOpenChange, onImported }) {
                     Auto-create missing teams
                   </label>
                 </div>
-                <div className="overflow-x-auto border border-slate-200 rounded">
+                <div className="overflow-x-auto border border-slate-200 dark:border-zinc-800 rounded">
                   <table className="text-xs w-full">
-                    <thead className="bg-slate-50">
+                    <thead className="bg-slate-50 dark:bg-zinc-950">
                       <tr>
                         {ALL_COLS.filter((c) => parsed.headers.includes(c)).map((c) => (
-                          <th key={c} className="px-2 py-1.5 text-left font-medium text-slate-600">{c}</th>
+                          <th key={c} className="px-2 py-1.5 text-left font-medium text-slate-600 dark:text-zinc-300">{c}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {previewRows.map((r, i) => (
-                        <tr key={i} className="border-t border-slate-100">
+                        <tr key={i} className="border-t border-slate-100 dark:border-zinc-800">
                           {ALL_COLS.filter((c) => parsed.headers.includes(c)).map((c) => (
                             <td key={c} className="px-2 py-1.5 truncate max-w-[160px]">{r[c] || <span className="text-slate-300">—</span>}</td>
                           ))}
@@ -237,7 +237,7 @@ export default function BulkImportDialog({ open, onOpenChange, onImported }) {
                     </tbody>
                   </table>
                 </div>
-                {parsed.data.length > 5 && <p className="text-xs text-slate-500">…and {parsed.data.length - 5} more</p>}
+                {parsed.data.length > 5 && <p className="text-xs text-slate-500 dark:text-zinc-400">…and {parsed.data.length - 5} more</p>}
               </div>
             )}
           </div>
@@ -265,20 +265,20 @@ export default function BulkImportDialog({ open, onOpenChange, onImported }) {
 
             {result.created.length > 0 && (
               <details className="text-sm" open>
-                <summary className="cursor-pointer font-medium text-slate-700 py-1">View created users ({result.created.length})</summary>
-                <div className="mt-2 max-h-56 overflow-y-auto border border-slate-200 rounded">
+                <summary className="cursor-pointer font-medium text-slate-700 dark:text-zinc-200 py-1">View created users ({result.created.length})</summary>
+                <div className="mt-2 max-h-56 overflow-y-auto border border-slate-200 dark:border-zinc-800 rounded">
                   <table className="text-xs w-full">
-                    <thead className="bg-slate-50 sticky top-0"><tr>
+                    <thead className="bg-slate-50 dark:bg-zinc-950 sticky top-0"><tr>
                       <th className="px-2 py-1.5 text-left">Email</th>
                       <th className="px-2 py-1.5 text-left">Role</th>
                       <th className="px-2 py-1.5 text-left">Temp password</th>
                     </tr></thead>
                     <tbody>
                       {result.created.map((c) => (
-                        <tr key={c.id} className="border-t border-slate-100">
+                        <tr key={c.id} className="border-t border-slate-100 dark:border-zinc-800">
                           <td className="px-2 py-1.5">{c.email}</td>
                           <td className="px-2 py-1.5">{c.role}</td>
-                          <td className="px-2 py-1.5 font-mono">{c.temp_password || <span className="text-slate-400">(user-supplied)</span>}</td>
+                          <td className="px-2 py-1.5 font-mono">{c.temp_password || <span className="text-slate-400 dark:text-zinc-500">(user-supplied)</span>}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -291,7 +291,7 @@ export default function BulkImportDialog({ open, onOpenChange, onImported }) {
             )}
             {(result.skipped.length > 0 || result.errors.length > 0) && (
               <details className="text-sm">
-                <summary className="cursor-pointer font-medium text-slate-700 py-1">Issues ({result.skipped.length + result.errors.length})</summary>
+                <summary className="cursor-pointer font-medium text-slate-700 dark:text-zinc-200 py-1">Issues ({result.skipped.length + result.errors.length})</summary>
                 <ul className="mt-2 space-y-1 text-xs">
                   {result.skipped.map((s, i) => (
                     <li key={`s${i}`} className="text-amber-700">Row {s.row} ({s.email}): {s.reason}</li>

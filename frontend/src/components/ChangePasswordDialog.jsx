@@ -95,7 +95,7 @@ export default function ChangePasswordDialog({ open, onOpenChange }) {
                 type="button"
                 data-testid="cp-toggle-current"
                 onClick={() => setShowCurrent((s) => !s)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-700"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:text-zinc-200"
               >
                 {showCurrent ? <EyeSlashIcon size={16} /> : <EyeIcon size={16} />}
               </button>
@@ -126,12 +126,12 @@ export default function ChangePasswordDialog({ open, onOpenChange }) {
                 type="button"
                 data-testid="cp-toggle-new"
                 onClick={() => setShowNext((s) => !s)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-700"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:text-zinc-200"
               >
                 {showNext ? <EyeSlashIcon size={16} /> : <EyeIcon size={16} />}
               </button>
             </div>
-            <p className="text-xs text-slate-500">Use 8+ characters with a mix of letters, numbers and symbols.</p>
+            <p className="text-xs text-slate-500 dark:text-zinc-400">Use 8+ characters with a mix of letters, numbers and symbols.</p>
           </div>
 
           <div className="space-y-1.5">

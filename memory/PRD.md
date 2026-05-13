@@ -66,6 +66,6 @@ Build a full-stack workforce daily-update and task management system with AI int
 - React Native Android app
 
 ## Next action items
-- Jira/Trello/Asana OAuth one-way sync for developers (P1, deferred)
-- Refactor `/app/backend/server.py` (1,800+ lines) into modular FastAPI routers (P3)
-- Migrate `google-generativeai` → `google-genai` SDK (P3, user marked "not required")
+- (Optional) Refactor `/app/backend/server.py` (1,900+ lines) into modular FastAPI routers — deferred at user request after final session
+- (Optional) Add Trello / Asana adapters alongside Jira (architecture supports it; only Jira shipped per Q3 b)
+- (Optional) Sign and submit the Android TWA build to Google Play Console

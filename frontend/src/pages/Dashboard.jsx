@@ -91,10 +91,10 @@ export default function Dashboard() {
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mt-1">Hello, {user.name?.split(" ")[0]}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <div className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg" data-testid="streak-counter">
+          <div className="inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg" data-testid="streak-counter">
             <Fire size={18} weight="fill" color="#F59E0B" />
             <span className="font-mono text-sm font-semibold">{streak}</span>
-            <span className="text-xs text-slate-500">day streak</span>
+            <span className="text-xs text-slate-500 dark:text-zinc-400">day streak</span>
           </div>
         </div>
       </div>
@@ -116,7 +116,7 @@ export default function Dashboard() {
             <Sparkle size={18} weight="fill" color="#0D9488" />
             <CardTitle className="text-base">AI Daily Digest</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-slate-700 whitespace-pre-wrap">{digest}</CardContent>
+          <CardContent className="text-sm text-slate-700 dark:text-zinc-200 whitespace-pre-wrap">{digest}</CardContent>
         </Card>
       )}
 
@@ -141,7 +141,7 @@ export default function Dashboard() {
                   key={n}
                   data-testid={`mood-${n}`}
                   onClick={() => setMood(n)}
-                  className={`w-9 h-9 rounded-md border text-sm font-medium ${mood === n ? "bg-slate-900 text-white border-slate-900" : "bg-white border-slate-200 text-slate-600"}`}
+                  className={`w-9 h-9 rounded-md border text-sm font-medium ${mood === n ? "bg-slate-900 text-white border-slate-900" : "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-300"}`}
                 >{n}</button>
               ))}
               <Button onClick={submitUpdate} disabled={submittingUpdate} className="ml-auto" data-testid="submit-update">
@@ -173,18 +173,18 @@ export default function Dashboard() {
           <h2 className="text-xl font-semibold tracking-tight mb-3">Team</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {people.filter((p) => p.id !== user.user_id).slice(0, 8).map((p) => (
-              <div key={p.id} className="bg-white border border-slate-200 rounded-lg p-3" data-testid={`person-card-${p.id}`}>
+              <div key={p.id} className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-3" data-testid={`person-card-${p.id}`}>
                 <div className="flex items-center gap-2">
                   <div className="w-9 h-9 rounded-md flex items-center justify-center text-white text-sm font-semibold" style={{ background: ROLE_COLOR[p.role] }}>
                     {p.name?.[0]?.toUpperCase()}
                   </div>
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">{p.name}</div>
-                    <div className="text-xs text-slate-500">{ROLE_LABEL[p.role]}</div>
+                    <div className="text-xs text-slate-500 dark:text-zinc-400">{ROLE_LABEL[p.role]}</div>
                   </div>
                 </div>
                 {p.streak_count > 0 && (
-                  <div className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+                  <div className="mt-2 text-xs text-slate-500 dark:text-zinc-400 flex items-center gap-1">
                     <Fire size={12} weight="fill" color="#F59E0B" /> {p.streak_count}-day streak
                   </div>
                 )}

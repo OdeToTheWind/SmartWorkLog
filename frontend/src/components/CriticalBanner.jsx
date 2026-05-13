@@ -35,11 +35,11 @@ export default function CriticalBanner({ user, onAck }) {
 
   if (!task) return null;
   return (
-    <div className="fixed top-0 left-0 lg:left-64 right-0 z-50 backdrop-blur-xl bg-white/90 border-b-2 border-red-600 p-3 flex items-center gap-3 critical-pulse">
+    <div className="fixed top-0 left-0 lg:left-64 right-0 z-50 backdrop-blur-xl bg-white dark:bg-zinc-900/90 border-b-2 border-red-600 p-3 flex items-center gap-3 critical-pulse">
       <Warning size={22} weight="fill" color="#DC2626" />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-semibold text-red-700">CRITICAL TASK — {task.title}</div>
-        <div className="text-xs text-slate-600 truncate">Please acknowledge to confirm receipt.</div>
+        <div className="text-xs text-slate-600 dark:text-zinc-300 truncate">Please acknowledge to confirm receipt.</div>
       </div>
       <Button onClick={acknowledge} className="bg-red-600 hover:bg-red-700" data-testid="critical-ack-btn">
         Acknowledged

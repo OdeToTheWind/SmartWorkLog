@@ -17,5 +17,7 @@
     border-radius: 12px; padding: 20px;
     transition: all 0.2s;
 }
+.dark .stat-card { background: #18181b; border-color: #27272a; }
 .stat-card:hover { box-shadow: 0 1px 3px rgba(0,0,0,0.04); transform: translateY(-1px); }
+.dark .stat-card:hover { box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
 .stat-num { font-family: 'Work Sans', sans-serif; font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }

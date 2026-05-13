@@ -47,7 +47,7 @@ export default function DailyUpdate() {
           <div className="flex items-center gap-3">
             <Label className="text-xs">Mood</Label>
             {[1,2,3,4,5].map((n) => (
-              <button key={n} data-testid={`du-mood-${n}`} onClick={() => setMood(n)} className={`w-9 h-9 rounded-md border text-sm ${mood === n ? "bg-slate-900 text-white border-slate-900" : "bg-white border-slate-200"}`}>{n}</button>
+              <button key={n} data-testid={`du-mood-${n}`} onClick={() => setMood(n)} className={`w-9 h-9 rounded-md border text-sm ${mood === n ? "bg-slate-900 text-white border-slate-900" : "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800"}`}>{n}</button>
             ))}
           </div>
           <div>
@@ -55,16 +55,19 @@ export default function DailyUpdate() {
             <Textarea rows={2} value={blocker} onChange={(e) => setBlocker(e.target.value)} placeholder="What's blocking you?" data-testid="du-blocker" />
           </div>
           <AttachmentUploader dailyUpdateDate={new Date().toISOString().slice(0,10)} />
-          <Button onClick={submit} disabled={busy} data-testid="du-submit">{busy ? "Submitting..." : "Submit & AI parse"}</Button>
+          <Button onClick={submit} disabled={busy} data-testid="du-submit" className="ai-gradient">
+            <Sparkle size={16} weight="fill" className="mr-1" />
+            {busy ? "Parsing..." : "Submit & AI parse"}
+          </Button>
         </CardContent>
       </Card>
       {aiReply && (
         <Card>
           <CardHeader className="flex flex-row items-center gap-2">
-            <Sparkle size={16} weight="fill" color="#0D9488" />
+            <Sparkle size={16} weight="fill" className="text-violet-500" />
             <CardTitle className="text-base">AI replied</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-slate-700">{aiReply}</CardContent>
+          <CardContent className="text-sm text-slate-700 dark:text-zinc-200">{aiReply}</CardContent>
         </Card>
       )}
     </div>

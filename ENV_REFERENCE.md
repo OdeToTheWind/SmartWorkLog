@@ -39,6 +39,17 @@ DIGEST_HOUR_UTC=18
 # PREVIEW:    https://task-intelligence-13.preview.emergentagent.com
 # PRODUCTION: https://task-intelligence-13.emergent.host
 PUBLIC_BASE_URL=https://task-intelligence-13.preview.emergentagent.com
+
+# === Jira OAuth (one-way external→WorkLog sync, P1) ===
+# To enable: create an Atlassian OAuth 2.0 (3LO) app and paste credentials below.
+# Where to get them: https://developer.atlassian.com/console/myapps → "Create" → "OAuth 2.0 integration"
+#   1. In Authorization → OAuth 2.0 (3LO) → Configure → set Callback URL to JIRA_REDIRECT_URI
+#   2. In Permissions → grant: read:jira-work, read:jira-user, offline_access
+#   3. Copy Client ID + Secret from the Settings tab
+JIRA_CLIENT_ID=
+JIRA_CLIENT_SECRET=
+JIRA_REDIRECT_URI=https://task-intelligence-13.preview.emergentagent.com/integrations/jira/callback
+JIRA_OAUTH_STATE_SECRET=worklog-jira-oauth-state-change-me
 ```
 
 ---
@@ -78,6 +89,9 @@ WDS_SOCKET_PORT=443
 | `MAKE_DIGEST_WEBHOOK_URL`    | Where backend POSTs the 6pm digest payload                                     | Make.com → Scenario → Webhook trigger → "Show webhook URL"                                             |
 | `MAKE_WEEKLY_PDF_WEBHOOK_URL`| Where backend POSTs the Friday weekly PDF payload                              | Same as above for the second scenario                                                                  |
 | `PUBLIC_BASE_URL`            | Used for Telegram setWebhook URL + file URLs inside the Friday PDF             | Update after deploy / domain change → backend will auto-register new Telegram webhook on next restart  |
+| `JIRA_CLIENT_ID` / `_SECRET` | Atlassian OAuth 2.0 (3LO) — enables Jira "Connect" button on Integrations page | Atlassian Developer Console → your app → Settings (Client ID is public; Secret must be kept private)   |
+| `JIRA_REDIRECT_URI`          | Where Atlassian redirects after authorization                                  | Must match the value configured in Atlassian Developer Console exactly (incl. scheme + path)           |
+| `JIRA_OAUTH_STATE_SECRET`    | Reserved for future state-hash signing; safe default provided                  | Rotate any time — does not invalidate existing connections                                             |
 
 ---
 
@@ -167,3 +181,57 @@ Before any major change or domain rotation:
 3. **Document the current Make.com scenario IDs** (both webhook URLs above)
 
 If `JWT_SECRET` changes, all existing JWTs become invalid → all users must re-login (no data loss, just session loss).
+
+---
+
+## Jira integration — step-by-step setup
+
+The backend exposes `/api/integrations/jira/{status,auth-url,callback,sync,disconnect}` and the frontend shows a "Connect Jira" card on **/integrations** for `developer`, `supervisor`, `hr`, `super_admin` roles. Until you set the env vars below, the card shows a "Jira not configured" warning.
+
+1. Visit https://developer.atlassian.com/console/myapps and click **Create → OAuth 2.0 integration**.
+2. In **Authorization → OAuth 2.0 (3LO) → Configure**, set **Callback URL** to `<PUBLIC_BASE_URL>/integrations/jira/callback` (use your production or preview URL — they must match exactly).
+3. In **Permissions**, add the **Jira API** product, then grant scopes: `read:jira-work`, `read:jira-user`, `offline_access`.
+4. In **Settings**, copy **Client ID** and **Secret**.
+5. Paste them into `backend/.env`:
+   ```env
+   JIRA_CLIENT_ID=<your client id>
+   JIRA_CLIENT_SECRET=<your client secret>
+   JIRA_REDIRECT_URI=https://task-intelligence-13.emergent.host/integrations/jira/callback
+   ```
+6. `sudo supervisorctl restart backend` to pick up the new env vars.
+7. Users with role `developer` (and above) will then see an active **Connect Jira** button on **/integrations**.
+
+**What gets synced:** Each "Sync now" click fetches up to 200 of the user's unfinished Jira issues (`assignee = currentUser() AND statusCategory != Done`) and mirrors them as **technical** tasks in WorkLog. Jira priorities map as: Highest→Critical, High→High, Medium→Medium, Low/Lowest→Low. Status maps: New→todo, In Progress→in_progress, Done→done. Synced tasks carry `external_source: "jira"`, `external_id: "jira:KEY-123"`, and `external_url` linking back to the Jira issue. **Jira remains the source of truth** — local edits will be overwritten on next sync.
+
+---
+
+## Android — install as a native-feel app (PWA)
+
+The web app is a **fully installable Progressive Web App** (PWA). On Android (Chrome, Edge, Samsung Internet, Brave, Opera):
+
+1. Visit `<PUBLIC_BASE_URL>` in a mobile browser.
+2. Sign in (or use the in-app **Install** banner that appears automatically — bottom-right).
+3. Tap browser menu (⋮) → **Install app** / **Add to Home screen**.
+4. The app launches in **standalone mode** (no browser chrome), has its own icon, splash screen, and full offline shell.
+
+### Generate a real APK / Play Store build (optional)
+
+Use either **PWABuilder** (web GUI, fastest) or **Bubblewrap** (Google's CLI):
+
+```bash
+# Option A: PWABuilder web UI
+open https://www.pwabuilder.com/   # paste your PUBLIC_BASE_URL, click "Build" → "Android"
+
+# Option B: Bubblewrap CLI (creates a signed APK/AAB locally)
+npm i -g @bubblewrap/cli
+bubblewrap init --manifest=https://task-intelligence-13.emergent.host/manifest.json
+bubblewrap build      # produces app-release-signed.apk + app-release-bundle.aab
+```
+
+Both wrap the PWA in a **Trusted Web Activity (TWA)** — Google Play accepts these as native apps. You only need to update the wrapper if `manifest.json` changes substantially.
+
+---
+
+## Dark / Light mode
+
+Built-in three-way toggle (System → Light → Dark) in the sidebar footer (sun/moon/desktop icon). Honors `prefers-color-scheme`, persists choice in `localStorage` under `worklog_theme`. Tokens — light: shadcn defaults; dark: `bg-zinc-950` / `text-zinc-50` / `border-zinc-800`. AI-driven CTAs use the `ai-gradient` class (indigo → purple → pink) so AI actions are visually distinguished from regular actions.

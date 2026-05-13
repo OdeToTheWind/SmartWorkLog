@@ -89,12 +89,12 @@ export default function ChangeEmailDialog({ open, onOpenChange }) {
                 type="button"
                 data-testid="ce-toggle-pwd"
                 onClick={() => setShowPwd((s) => !s)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-700"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:text-zinc-200"
               >
                 {showPwd ? <EyeSlashIcon size={16} /> : <EyeIcon size={16} />}
               </button>
             </div>
-            <p className="text-xs text-slate-500">We require your password to confirm this change.</p>
+            <p className="text-xs text-slate-500 dark:text-zinc-400">We require your password to confirm this change.</p>
           </div>
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={() => handleClose(false)} data-testid="ce-cancel-btn">Cancel</Button>

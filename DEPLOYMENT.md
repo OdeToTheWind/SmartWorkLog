@@ -38,6 +38,8 @@ Optional but recommended:
 
 - [ ] Run the deployment static check: ask the platform/agent to run `deployment_agent` and confirm `status: pass`
 - [ ] Backup MongoDB if the deploy will reuse the same DB instance
+- [ ] If using Jira integration: set `JIRA_CLIENT_ID`, `JIRA_CLIENT_SECRET`, `JIRA_REDIRECT_URI` in `/app/backend/.env` and update the **Callback URL** in your Atlassian Developer Console app to match the production redirect URI
+- [ ] If you plan to distribute on Google Play: have the manifest, icons, and a signing keystore ready before running Bubblewrap / PWABuilder (see "Android — Play Store build" below)
 
 ---
 
@@ -438,6 +440,59 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://task-intelligence-13.emergent.host/api/telegram/webhook"}'
 ```
+
+---
+
+## Android — Play Store build (PWA → TWA)
+
+The web app is a **PWA** and installs natively on Android out of the box (Chrome auto-prompt or "Add to Home Screen"). To publish to **Google Play**, wrap it as a **Trusted Web Activity (TWA)** — Google supports this as a first-class app type.
+
+### Option A — PWABuilder (web UI, no code)
+
+1. Visit https://www.pwabuilder.com/.
+2. Paste your production URL (e.g. `https://task-intelligence-13.emergent.host`).
+3. Wait for the audit; fix any warnings (the manifest in this repo already passes the core checks).
+4. Click **Build** → **Android**. Choose **TWA package**.
+5. Download the generated **`.aab`** (Android App Bundle) and the suggested signing key info.
+6. Upload to **Google Play Console** → Create app → Release → Internal testing.
+
+### Option B — Bubblewrap CLI (Google's official tool)
+
+```bash
+npm i -g @bubblewrap/cli
+bubblewrap init --manifest=https://task-intelligence-13.emergent.host/manifest.json
+# Answer the prompts — accept defaults where possible. Bubblewrap will:
+#  - create a signing keystore (save the password!)
+#  - download icons from your manifest
+#  - generate the Android Studio project
+bubblewrap build
+# Outputs: app-release-signed.apk  and  app-release-bundle.aab
+```
+
+### Required by Play Store
+
+- A SHA-256 fingerprint of your signing certificate must be hosted at `<PUBLIC_BASE_URL>/.well-known/assetlinks.json` to prove ownership and unlock fullscreen mode. Bubblewrap prints the exact JSON to host. Put this file in `/app/frontend/public/.well-known/` and redeploy.
+- The TWA package targets `android.intent.action.VIEW` for the production domain only — preview deploys will fall back to a browser tab.
+
+### Updating the published Android app
+
+You do **not** need to rebuild and re-submit for every PWA change. The TWA just loads the live URL — pushing a new frontend build to production automatically updates the Android app's content on next launch. Only re-submit when:
+- `manifest.json` changes significantly (new shortcuts, icons, name)
+- You change the package name or target SDK
+- Google Play policy mandates a higher targetSdkVersion
+
+---
+
+## Jira integration — post-deploy steps
+
+If you enable the Jira integration (P1 feature), after deploy:
+
+1. In **Atlassian Developer Console** (https://developer.atlassian.com/console/myapps), open your OAuth 2.0 app's **Authorization** tab.
+2. Update **Callback URL** to the production URI: `https://task-intelligence-13.emergent.host/integrations/jira/callback`.
+3. Set `JIRA_REDIRECT_URI` in `/app/backend/.env` to the exact same value.
+4. `sudo supervisorctl restart backend`.
+5. Visit `/integrations` in the deployed app — the "Connect Jira" button should be active. Click → Atlassian consent screen → returns and shows "Connected".
+6. Click **Sync now** → assigned issues appear under **Tasks** with `external_source: jira`.
 
 ---
 

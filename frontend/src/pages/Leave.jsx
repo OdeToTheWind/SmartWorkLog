@@ -59,7 +59,7 @@ export default function Leave() {
               <button
                 key={s}
                 onClick={() => setFilter(s)}
-                className={`px-3 py-1.5 rounded-md border ${filter === s ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}
+                className={`px-3 py-1.5 rounded-md border ${filter === s ? "bg-slate-900 text-white border-slate-900" : "bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-800"}`}
                 data-testid={`leave-filter-${s}`}
               >
                 {s} {s !== "all" && `(${items.filter((l) => l.status === s).length})`}
@@ -70,20 +70,20 @@ export default function Leave() {
       </div>
 
       <div className="space-y-2">
-        {items.length === 0 && <div className="text-sm text-slate-500">No leave requests.</div>}
+        {items.length === 0 && <div className="text-sm text-slate-500 dark:text-zinc-400">No leave requests.</div>}
         {items.filter((l) => filter === "all" || l.status === filter).map((l) => {
           const person = peopleMap[l.user_id];
           return (
-          <div key={l.id} className="bg-white border border-slate-200 rounded-lg p-4 flex items-center gap-3" data-testid={`leave-${l.id}`}>
+          <div key={l.id} className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-4 flex items-center gap-3" data-testid={`leave-${l.id}`}>
             {isAdmin && person && (
               <div className="w-9 h-9 rounded-md flex items-center justify-center text-white text-sm font-semibold flex-shrink-0" style={{ background: "#4F46E5" }}>
                 {person.name?.[0]?.toUpperCase()}
               </div>
             )}
             <div className="flex-1 min-w-0">
-              {isAdmin && person && <div className="text-sm font-medium">{person.name} <span className="text-xs text-slate-500 font-normal">· {person.email}</span></div>}
+              {isAdmin && person && <div className="text-sm font-medium">{person.name} <span className="text-xs text-slate-500 dark:text-zinc-400 font-normal">· {person.email}</span></div>}
               <div className="text-sm">{l.start_date} → {l.end_date}</div>
-              <div className="text-xs text-slate-500">{l.leave_type} {l.reason && `· ${l.reason}`}</div>
+              <div className="text-xs text-slate-500 dark:text-zinc-400">{l.leave_type} {l.reason && `· ${l.reason}`}</div>
             </div>
             <div className={`text-xs font-medium uppercase ${l.status === "approved" ? "text-emerald-600" : l.status === "rejected" ? "text-red-600" : "text-amber-600"}`}>{l.status}</div>
             {canApprove && l.status === "pending" && (
